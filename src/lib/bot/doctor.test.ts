@@ -385,6 +385,8 @@ const RX_NAMES_Q = [
   "",
   "_You can also send a photo, or tap Skip._",
 ].join("\n");
+const PREVIEW_NOTE =
+  "👆 _The PDF above is a preview. Nothing is sent until you tap Send to patient._";
 const RX_FIX =
   "✏️ _Mistake? Send the corrected list again: long-press your message → Copy → fix it → send._";
 const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
@@ -428,10 +430,25 @@ test("typed prescription → check screen in words → Send: PDF stored and sent
       "Augmentin 625  1-0-1  AF  5d\nPan D 40mg  2-0-2  BF  21d\nAdvice: Drink plenty of water",
     ),
   );
-  expect(bodies(confirm)[0]).toBe(
-    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan D 40mg* — 2 Morning, 2 Night · Before food · 21 days\n\n*Advice:* Drink plenty of water\n\n${RX_FIX}`,
+  expect(bodies(confirm)[1]).toBe(
+    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan D 40mg* — 2 Morning, 2 Night · Before food · 21 days\n\n*Advice:* Drink plenty of water\n\n${PREVIEW_NOTE}\n${RX_FIX}`,
   );
-  expect(ids(confirm[0])).toEqual(["send", "back"]);
+  expect(ids(confirm[1])).toEqual(["send", "back"]);
+  // the preview is the real PDF, sent to the doctor only; the visit is still open
+  expect(confirm[0]).toMatchObject({
+    msg: {
+      kind: "document",
+      link: `mem://prescriptions/preview/${a.id}.pdf`,
+      caption: "Preview: this is exactly what Raj will get. Not sent yet.",
+    },
+  });
+  expect(confirm[0].to).toBe(D); // to the doctor, not the patient
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+  expect(
+    new TextDecoder().decode(
+      s.files.get(`prescriptions/preview/${a.id}.pdf`)?.slice(0, 5),
+    ),
+  ).toBe("%PDF-");
   const out = await run(s, r("send"));
   expect(out.find((x) => x.msg.kind === "document")).toMatchObject({
     from: "DOCPN",
@@ -450,8 +467,8 @@ test("copying the whole prompt reads only the example row", async () => {
   const s = await sigStore();
   await complete(s, true);
   const confirm = await run(s, t(RX_NAMES_Q));
-  expect(bodies(confirm)[0]).toBe(
-    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n\n${RX_FIX}`,
+  expect(bodies(confirm)[1]).toBe(
+    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n\n${PREVIEW_NOTE}\n${RX_FIX}`,
   );
 });
 
@@ -463,14 +480,15 @@ test("a medicine with no time blocks Send; sending the corrected list replaces i
     `*Check the prescription for Raj:*\n\n1. *Dolo 650* — After food · 3 days\n   ⚠️ _No time found_\n2. *Tent* — Morning\n   ⚠️ _No food, days found_\n\n❌ *Every medicine needs a time* like 1-0-1.\n${RX_FIX}`,
   );
   expect(ids(bad[0])).toEqual(["back"]);
+  expect(bad).toHaveLength(1); // no preview PDF until every line has a time
   await run(s, r("send")); // a stale Send tap does nothing
   expect(s.appointments[0].status).toBe("CONFIRMED");
   // edit: the doctor resends the fixed list straight from the check screen
   const ok = await run(s, t("Dolo 650 1-0-1 AF 3d\nTent 1-0-0 BF 8d"));
-  expect(bodies(ok)[0]).toBe(
-    `*Check the prescription for Raj:*\n\n1. *Dolo 650* — Morning, Night · After food · 3 days\n2. *Tent* — Morning · Before food · 8 days\n\n${RX_FIX}`,
+  expect(bodies(ok)[1]).toBe(
+    `*Check the prescription for Raj:*\n\n1. *Dolo 650* — Morning, Night · After food · 3 days\n2. *Tent* — Morning · Before food · 8 days\n\n${PREVIEW_NOTE}\n${RX_FIX}`,
   );
-  expect(ids(ok[0])).toEqual(["send", "back"]);
+  expect(ids(ok[1])).toEqual(["send", "back"]);
   await run(s, r("send"));
   expect(s.appointments[0]).toMatchObject({
     status: "COMPLETED",

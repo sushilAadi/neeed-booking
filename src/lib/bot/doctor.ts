@@ -23,6 +23,7 @@ import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
 import {
   completeVisit,
+  previewVisit,
   type RxContent,
   SAVED_CLOSED,
   SAVED_SENT,
@@ -1006,7 +1007,7 @@ function rxSummary(x: RxState): Out {
     };
   return {
     kind: "buttons",
-    body: `${head}\n\n${RX_FIX}`,
+    body: `${head}\n\n👆 _The PDF above is a preview. Nothing is sent until you tap Send to patient._\n${RX_FIX}`,
     buttons: [{ id: "send", title: "Send to patient" }, BACK],
   };
 }
@@ -1029,5 +1030,18 @@ async function rxTyped(
   if (!parsed.meds.length) return [rxPrompt()];
   const x = { ...rxCtx(conv), meds: parsed.meds, advice: parsed.advice };
   await saveState(c.store, conv, "rx_confirm", x);
-  return [rxSummary(x)];
+  if (!rxReady(x)) return [rxSummary(x)]; // fix the lines first, no PDF yet
+  const a = await ownConfirmed(c, x.appointmentId);
+  if (!a) return todayList(c, conv);
+  try {
+    // the real PDF, so the doctor sees exactly what the patient will get
+    const pdf = await previewVisit(c.store, c.doctor, a, {
+      meds: x.meds,
+      advice: x.advice,
+    });
+    return [pdf, rxSummary(x)];
+  } catch (e) {
+    console.error("rx preview failed", e);
+    return [rxSummary(x)]; // the check text still lets them send
+  }
 }

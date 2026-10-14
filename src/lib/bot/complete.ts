@@ -3,7 +3,7 @@ import { formatMed, type Rx } from "../rx/parse";
 import { renderPrescription, rxNo } from "../rx/pdf";
 import { fmtDate, fmtDay, fmtRange } from "../time";
 import { windowOpen } from "../wa/deliver";
-import type { Send } from "../wa/types";
+import type { Out, Send } from "../wa/types";
 
 export type RxContent =
   | { rx: Rx }
@@ -42,26 +42,13 @@ export async function completeVisit(
     prescriptionText = content.caption || null;
   }
 
-  const sigPath = doctor.signaturePath as string;
-  const pdf = await renderPrescription({
-    clinic: doctor.clinicName,
-    doctorName: doctor.name,
-    regNo: doctor.registrationNumber ?? "",
-    rxNo: rxNo(a.id),
-    patientName: a.patientName,
-    patientPhone: a.patientPhone,
-    date: fmtDate(a.startsAt),
-    time: fmtRange(a.startsAt, a.endsAt),
+  const pdf = await visitPdf(store, doctor, a, {
     // A photo's caption is advice; typed or page prescriptions arrive structured.
     rx:
       "rx" in content
         ? content.rx
         : { meds: [], advice: prescriptionText ? [prescriptionText] : [] },
     photo,
-    signature: {
-      bytes: await store.getFile("signatures", sigPath),
-      mime: sigPath.endsWith(".png") ? "image/png" : "image/jpeg",
-    },
   });
   const prescriptionPdfPath = `${a.id}.pdf`;
   await store.putFile(
@@ -95,6 +82,54 @@ export async function completeVisit(
       filename: `Prescription-${rxNo(a.id)}.pdf`,
       caption: `Prescription from your visit on ${fmtDay(a.startsAt)}, ${fmtRange(a.startsAt, a.endsAt)} with ${doctor.name}.`,
     },
+  };
+}
+
+/** The same PDF the patient gets — used for the final file and for the doctor's preview. */
+async function visitPdf(
+  store: Store,
+  doctor: Doctor,
+  a: Appointment,
+  body: { rx: Rx; photo?: { bytes: Uint8Array; mime: string } },
+): Promise<Uint8Array> {
+  const sigPath = doctor.signaturePath as string;
+  return renderPrescription({
+    clinic: doctor.clinicName,
+    doctorName: doctor.name,
+    regNo: doctor.registrationNumber ?? "",
+    rxNo: rxNo(a.id),
+    patientName: a.patientName,
+    patientPhone: a.patientPhone,
+    date: fmtDate(a.startsAt),
+    time: fmtRange(a.startsAt, a.endsAt),
+    rx: body.rx,
+    photo: body.photo,
+    signature: {
+      bytes: await store.getFile("signatures", sigPath),
+      mime: sigPath.endsWith(".png") ? "image/png" : "image/jpeg",
+    },
+  });
+}
+
+/** Renders the prescription without completing the visit; the doctor checks it before Send. */
+export async function previewVisit(
+  store: Store,
+  doctor: Doctor,
+  a: Appointment,
+  rx: Rx,
+): Promise<Out> {
+  const path = `preview/${a.id}.pdf`; // overwritten by each new preview
+  await store.putFile(
+    "prescriptions",
+    path,
+    await visitPdf(store, doctor, a, { rx }),
+    "application/pdf",
+  );
+  return {
+    kind: "document",
+    link: await store.signedUrl("prescriptions", path),
+    filename: `Preview-${rxNo(a.id)}.pdf`,
+    caption: `Preview: this is exactly what ${a.patientName} will get. Not sent yet.`,
   };
 }
 
