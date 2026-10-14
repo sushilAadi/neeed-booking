@@ -142,13 +142,37 @@ async function menu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   const t = today(now);
   const all = await store.patientAppointments(doctor.id, msg.from);
   const todays = all.filter((a) => a.startsAt >= t.from && a.startsAt < t.to);
-  const rows = [{ id: "book", title: "Book" }];
-  if (todays.length) rows.push({ id: "mine", title: "My Appointments" });
+  // WhatsApp limits: title 24 chars, description 72 chars.
+  const rows = [
+    {
+      id: "book",
+      title: "Book appointment",
+      description: "Pick a time to see the doctor today",
+    },
+  ];
+  if (todays.length)
+    rows.push({
+      id: "mine",
+      title: "My appointments",
+      description: "See your booking for today",
+    });
   if (todays.some((a) => a.status === "CONFIRMED"))
-    rows.push({ id: "cancel", title: "Cancel" });
+    rows.push({
+      id: "cancel",
+      title: "Cancel appointment",
+      description: "Cancel your booking for today",
+    });
   if (all.some((a) => a.prescriptionPdfPath))
-    rows.push({ id: "rx", title: "My Prescriptions" });
-  rows.push({ id: "chat", title: "Normal chat" });
+    rows.push({
+      id: "rx",
+      title: "My prescriptions",
+      description: "Get the prescription PDF from a past visit",
+    });
+  rows.push({
+    id: "chat",
+    title: "Chat with the clinic",
+    description: "Talk to the clinic directly. Type /book to book later",
+  });
   await saveState(store, conv, "idle");
   return [
     {

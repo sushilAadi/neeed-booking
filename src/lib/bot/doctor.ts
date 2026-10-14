@@ -244,14 +244,44 @@ async function menu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       body: `Hi ${c.doctor.name}. What would you like to do?`,
       button: "Choose an option",
       rows: [
-        { id: "today", title: "Today" },
+        // WhatsApp limits: title 24 chars, description 72 chars.
+        {
+          id: "today",
+          title: "Today's patients",
+          description:
+            "See today's bookings, mark a visit complete, send prescription",
+        },
         closed
-          ? { id: "open", title: "Open today" }
-          : { id: "close", title: "Close today" },
-        { id: "block", title: "Block my time" },
-        { id: "dcancel", title: "Cancel appointment" },
-        { id: "hours", title: "Clinic hours" },
-        { id: "setup", title: "Prescription setup" },
+          ? {
+              id: "open",
+              title: "Open today",
+              description: "Start taking bookings for today again",
+            }
+          : {
+              id: "close",
+              title: "Close today",
+              description: "Stop new bookings for today (holiday, emergency)",
+            },
+        {
+          id: "block",
+          title: "Block my time",
+          description: "Stop bookings for some hours or a whole day",
+        },
+        {
+          id: "dcancel",
+          title: "Cancel appointment",
+          description: "Cancel one patient's booking and tell them",
+        },
+        {
+          id: "hours",
+          title: "Clinic hours",
+          description: "Change opening hours, lunch break, time per patient",
+        },
+        {
+          id: "setup",
+          title: "Prescription setup",
+          description: "Update registration number or signature",
+        },
       ],
     },
   ];
@@ -472,10 +502,26 @@ async function blockRanges(
       body: `What do you want to block on ${fmtDay(atIst(date, "12:00"))}?`,
       button: "Choose a range",
       rows: [
-        { id: "r:whole", title: "Whole day" },
-        { id: "r:morning", title: "Morning" },
-        { id: "r:afternoon", title: "Afternoon" },
-        { id: "r:custom", title: "Particular time" },
+        {
+          id: "r:whole",
+          title: "Whole day",
+          description: "No bookings at all that day",
+        },
+        {
+          id: "r:morning",
+          title: "Morning",
+          description: "Block your morning clinic hours",
+        },
+        {
+          id: "r:afternoon",
+          title: "Afternoon",
+          description: "Block your afternoon clinic hours",
+        },
+        {
+          id: "r:custom",
+          title: "Particular time",
+          description: "You type the start and end time",
+        },
         BACK,
       ],
     },
