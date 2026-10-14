@@ -45,7 +45,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     await saveState(c.store, conv, "chat");
     return [
       say(
-        `Sure — ${c.doctor.name} will reply here personally. Type /book any time to book an appointment.`,
+        "Okay, the bot will stay quiet. Chat as usual. Type /book any time to book an appointment.",
       ),
     ];
   }
@@ -170,8 +170,8 @@ async function menu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     });
   rows.push({
     id: "chat",
-    title: "Chat with the clinic",
-    description: "Talk to the clinic directly. Type /book to book later",
+    title: "Normal chat",
+    description: "Not booking? Chat as usual, the bot stays quiet",
   });
   await saveState(store, conv, "idle");
   return [

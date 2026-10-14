@@ -50,7 +50,7 @@ test("menu shows mine + cancel when the patient has a confirmed appointment toda
 test("Normal chat goes silent; a keyword wakes it", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   expect(bodies(await run(s, reply(P, "chat")))).toEqual([
-    "Sure — Dr. Mehta will reply here personally. Type /book any time to book an appointment.",
+    "Okay, the bot will stay quiet. Chat as usual. Type /book any time to book an appointment.",
   ]);
   await s.touchInbound("DOCPN", P, NOW);
   expect(await run(s, text(P, "how are you"))).toEqual([]);
