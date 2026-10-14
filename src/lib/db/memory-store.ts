@@ -6,7 +6,7 @@ export type MemoryStore = Store & {
 };
 
 export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
-  const doctors = [...(seed?.doctors ?? [])];
+  const doctors = (seed?.doctors ?? []).map((d) => ({ ...d }));
   const appointments: Appointment[] = [];
   const blocks: Block[] = [];
   const closures = new Set<string>();
