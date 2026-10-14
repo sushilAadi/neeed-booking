@@ -126,7 +126,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
         });
         return [RX_PROMPT];
       }
-      if (i === "send") {
+      if (i === "send" && rxReady(rxCtx(conv))) {
         const x = rxCtx(conv);
         return markDone(c, conv, { rx: { meds: x.meds, advice: x.advice } });
       }
@@ -885,16 +885,37 @@ const rxCtx = (conv: Conversation): RxState => ({
   advice: (conv.ctx.advice as string[]) ?? [],
 });
 
+const hasTime = (m: Med) => !!m.dose || !!m.sos;
+/** A medicine with no time can't go to a patient; missing food or days is only a warning. */
+const rxReady = (x: RxState) => x.meds.every(hasTime);
+
+function missing(m: Med): string {
+  const gaps = [
+    !hasTime(m) && "time",
+    m.food === null && "food",
+    m.duration === null && "days",
+  ].filter(Boolean);
+  return gaps.length ? `\n   ⚠️ _No ${gaps.join(", ")} found_` : "";
+}
+
 /** Spelled out in words, so a misread line is caught before it reaches the patient. */
 function rxSummary(x: RxState): Out {
   // WhatsApp *bold* on each medicine name (medSummary starts with the name).
   const lines = x.meds.map(
-    (m, k) => `${k + 1}. *${m.name}*${medSummary(m).slice(m.name.length)}`,
+    (m, k) =>
+      `${k + 1}. *${m.name}*${medSummary(m).slice(m.name.length)}${missing(m)}`,
   );
   const adv = x.advice.length ? `\n\n*Advice:* ${x.advice.join(" ")}` : "";
+  const head = `*Check the prescription for ${x.patient}:*\n\n${lines.join("\n")}${adv}`;
+  if (!rxReady(x))
+    return {
+      kind: "buttons",
+      body: `${head}\n\n❌ *Every medicine needs a time* like 1-0-1. Tap Start over and type it again.`,
+      buttons: [{ id: "restart", title: "Start over" }, BACK],
+    };
   return {
     kind: "buttons",
-    body: `*Check the prescription for ${x.patient}:*\n\n${lines.join("\n")}${adv}`,
+    body: head,
     buttons: [
       { id: "send", title: "Send to patient" },
       { id: "restart", title: "Start over" },

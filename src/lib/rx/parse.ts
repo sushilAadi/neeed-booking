@@ -44,7 +44,10 @@ function durationText(n: number, unit: string): string {
 }
 
 function parseLine(line: string): Med {
-  let rest = line;
+  // Doctors skip spaces on a phone keyboard: "1-0-0BF", "BF8D", "AF5d".
+  let rest = line
+    .replace(/(\d\s*-\s*\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?)(?=[a-z])/gi, "$1 ")
+    .replace(/\b(af|bf|a\/f|b\/f)(?=\d)/gi, "$1 ");
   let dose: Dose | null = null;
   const d = DOSE.exec(rest);
   if (d) {

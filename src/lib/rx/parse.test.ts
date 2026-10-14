@@ -151,3 +151,15 @@ test("the WhatsApp example parses when copied whole — backticks, header and ru
   ]);
   expect(r.advice).toEqual(["drink water"]);
 });
+
+test("glued shorthand without spaces still reads: 1-0-0BF, BF8D, AF5d", () => {
+  expect(
+    parseRx("Tent 1-0-0BF 8D\nDolo 650 1-0-1 BF8D\nPan 40 1-0-0AF5d").meds.map(
+      medSummary,
+    ),
+  ).toEqual([
+    "Tent — Morning · Before food · 8 days",
+    "Dolo 650 — Morning, Night · Before food · 8 days",
+    "Pan 40 — Morning · After food · 5 days",
+  ]);
+});

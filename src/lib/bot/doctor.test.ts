@@ -407,6 +407,21 @@ test("copying the whole prompt reads only the example rows", async () => {
   );
 });
 
+test("a medicine with no time blocks Send; missing food or days only warns", async () => {
+  const s = await sigStore();
+  await complete(s, true);
+  const bad = await run(s, t("Dolo 650 AF 3d\nPan 40 1-0-0"));
+  expect(bodies(bad)[0]).toBe(
+    "*Check the prescription for Raj:*\n\n1. *Dolo 650* — After food · 3 days\n   ⚠️ _No time found_\n2. *Pan 40* — Morning\n   ⚠️ _No food, days found_\n\n❌ *Every medicine needs a time* like 1-0-1. Tap Start over and type it again.",
+  );
+  expect(ids(bad[0])).toEqual(["restart", "back"]);
+  await run(s, r("send")); // a stale Send tap does nothing
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+  await run(s, r("restart"));
+  const ok = await run(s, t("Pan 40 1-0-0"));
+  expect(ids(ok[0])).toEqual(["send", "restart", "back"]);
+});
+
 test("typed prescription: Back and Start over return to the typing prompt, nothing saved", async () => {
   const s = await sigStore();
   await complete(s, true);
