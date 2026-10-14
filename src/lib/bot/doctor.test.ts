@@ -329,12 +329,22 @@ test("block clashing with today's booking → warning; cn cancels + notifies; ke
 
 // ---- Task 9: mark complete ----
 const RX_NAMES_Q =
-  "Marking that visit complete.\n\nType the medicine names, one per line. For example:\nAugmentin 625\nPan D 40mg\n\nI'll then ask when to take each one.\nOr send a photo of the prescription, or tap Skip.";
+  "Or type the medicine names here, one per line (e.g. Augmentin 625), send a photo of the prescription, or tap Skip.";
 const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
   const a = await book(s, "919111", "14:30", "15:00");
   if (patientWindowOpen) await s.touchInbound("DOCPN", "919111", NOW);
   const prompt = await run(s, r(`done:${a.id}`));
-  expect(bodies(prompt)).toEqual([RX_NAMES_Q]);
+  expect(bodies(prompt)).toEqual([
+    "Write the prescription for Raj (2:30 PM–3:00 PM). Tap the button, fill it in and tap Send.",
+    RX_NAMES_Q,
+  ]);
+  expect(prompt[0].msg).toMatchObject({
+    kind: "link",
+    button: "Write prescription",
+  });
+  expect((prompt[0].msg as { url: string }).url).toMatch(
+    /^http:\/\/localhost:3000\/rx\/[\w-]+\.[\w-]+$/,
+  );
   return a;
 };
 const sigStore = async () => {
@@ -690,7 +700,7 @@ test("mark complete Back → Today list; doctor cancel reason Back → list", as
   const s = createMemoryStore({ doctors: [DOC] });
   const a = await book(s, "919111", "14:30", "15:00");
   const rx = await run(s, r(`done:${a.id}`));
-  expect(ids(rx[0])).toEqual(["skip", "back"]);
+  expect(ids(rx[1])).toEqual(["skip", "back"]); // rx[0] is the page link
   expect(bodies(await run(s, r("back")))[0]).toContain("Today's appointments:");
   expect(s.appointments[0].status).toBe("CONFIRMED");
   await run(s, r("dcancel"));

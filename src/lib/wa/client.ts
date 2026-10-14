@@ -28,6 +28,19 @@ export function toGraph(to: string, msg: Out): Record<string, unknown> {
           caption: cut(msg.caption, 1024),
         },
       };
+    case "link":
+      return {
+        ...base,
+        type: "interactive",
+        interactive: {
+          type: "cta_url",
+          body: { text: cut(msg.body, 1024) },
+          action: {
+            name: "cta_url",
+            parameters: { display_text: cut(msg.button, 20), url: msg.url },
+          },
+        },
+      };
     case "buttons":
       if (msg.buttons.length < 1 || msg.buttons.length > 3)
         throw new Error(`buttons: ${msg.buttons.length}`);

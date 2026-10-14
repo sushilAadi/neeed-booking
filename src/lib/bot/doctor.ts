@@ -4,8 +4,8 @@ import type {
   Doctor,
   HoursPatch,
 } from "../db/types";
-import { formatMed, type Med, medSummary, parseRx, type Rx } from "../rx/parse";
-import { renderPrescription, rxNo } from "../rx/pdf";
+import { signRxToken } from "../rx/link";
+import { type Med, medSummary, parseRx, type Rx } from "../rx/parse";
 import {
   crosses,
   lunchHours,
@@ -17,9 +17,15 @@ import {
   periodRange,
   type Range,
 } from "../slots";
-import { addDays, atIst, fmtDate, fmtDay, fmtRange, fmtTime } from "../time";
+import { addDays, atIst, fmtDay, fmtRange, fmtTime } from "../time";
 import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
+import {
+  completeVisit,
+  type RxContent,
+  SAVED_CLOSED,
+  SAVED_SENT,
+} from "./complete";
 import {
   BACK,
   type BotCtx,
@@ -580,8 +586,22 @@ async function blockApply(
 }
 
 const RX_PROMPT = skipPrompt(
-  "Marking that visit complete.\n\nType the medicine names, one per line. For example:\nAugmentin 625\nPan D 40mg\n\nI'll then ask when to take each one.\nOr send a photo of the prescription, or tap Skip.",
+  "Or type the medicine names here, one per line (e.g. Augmentin 625), send a photo of the prescription, or tap Skip.",
 );
+
+/** Where the prescription page lives (Vercel sets the production host). */
+export const appUrl = () =>
+  process.env.APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
+const rxLink = (c: BotCtx, a: Appointment): Out => ({
+  kind: "link",
+  body: `Write the prescription for ${a.patientName} (${fmtRange(a.startsAt, a.endsAt)}). Tap the button, fill it in and tap Send.`,
+  button: "Write prescription",
+  url: `${appUrl()}/rx/${signRxToken(a.id, c.now, process.env.WA_APP_SECRET ?? "")}`,
+});
 
 async function ownConfirmed(
   c: BotCtx,
@@ -602,7 +622,7 @@ async function markStart(
     appointmentId: id,
     patient: a.patientName,
   });
-  return [RX_PROMPT];
+  return [rxLink(c, a), RX_PROMPT];
 }
 
 async function markDone(
@@ -617,93 +637,16 @@ async function markDone(
     await saveState(c.store, conv, "idle");
     return [say("Marked complete.")];
   }
-
-  const visit = `${fmtDay(a.startsAt)}, ${fmtRange(a.startsAt, a.endsAt)}`;
-  let prescriptionText: string | null = null;
-  let prescriptionImagePath: string | null = null;
-  let photo: { bytes: Uint8Array; mime: string } | undefined;
-  if ("rx" in rx)
-    prescriptionText = [
-      ...rx.rx.meds.map(formatMed),
-      ...rx.rx.advice.map((a) => `Advice: ${a}`),
-    ].join("\n");
+  let content: RxContent;
+  if ("rx" in rx) content = rx;
   else {
     if (!c.media) throw new Error("media downloader missing");
-    photo = await c.media(rx.mediaId);
-    const png = photo.mime === "image/png";
-    prescriptionImagePath = `${a.id}.${png ? "png" : "jpg"}`;
-    await c.store.putFile(
-      "prescriptions",
-      prescriptionImagePath,
-      photo.bytes,
-      png ? "image/png" : "image/jpeg",
-    );
-    prescriptionText = rx.caption || null;
+    content = { photo: await c.media(rx.mediaId), caption: rx.caption || null };
   }
-
-  const sigPath = c.doctor.signaturePath as string;
-  const pdf = await renderPrescription({
-    clinic: c.doctor.clinicName,
-    doctorName: c.doctor.name,
-    regNo: c.doctor.registrationNumber ?? "",
-    rxNo: rxNo(a.id),
-    patientName: a.patientName,
-    patientPhone: a.patientPhone,
-    date: fmtDate(a.startsAt),
-    time: fmtRange(a.startsAt, a.endsAt),
-    // A photo's caption is advice; guided answers arrive already structured.
-    rx:
-      "rx" in rx
-        ? rx.rx
-        : { meds: [], advice: prescriptionText ? [prescriptionText] : [] },
-    photo,
-    signature: {
-      bytes: await c.store.getFile("signatures", sigPath),
-      mime: sigPath.endsWith(".png") ? "image/png" : "image/jpeg",
-    },
-  });
-  const prescriptionPdfPath = `${a.id}.pdf`;
-  await c.store.putFile(
-    "prescriptions",
-    prescriptionPdfPath,
-    pdf,
-    "application/pdf",
-  );
-  await c.store.updateAppointment(a.id, {
-    status: "COMPLETED",
-    prescriptionText,
-    prescriptionImagePath,
-    prescriptionPdfPath,
-  });
+  const toPatient = await completeVisit(c.store, c.doctor, a, content, c.now);
   // only now: if anything above throws, the doctor stays in rx_input and can resend
   await saveState(c.store, conv, "idle");
-
-  if (
-    !(await windowOpen(
-      c.store,
-      c.doctor.businessPhoneNumberId,
-      a.patientPhone,
-      c.now,
-    ))
-  )
-    return [
-      say(
-        "Saved. The patient's 24-hour window has closed, so they'll get it from \"My Prescriptions\" next time they message.",
-      ),
-    ];
-  return [
-    {
-      from: c.doctor.businessPhoneNumberId,
-      to: a.patientPhone,
-      msg: {
-        kind: "document",
-        link: await c.store.signedUrl("prescriptions", prescriptionPdfPath),
-        filename: `Prescription-${rxNo(a.id)}.pdf`,
-        caption: `Prescription from your visit on ${visit} with ${c.doctor.name}.`,
-      },
-    },
-    say("Saved and sent to the patient."),
-  ];
+  return toPatient ? [toPatient, say(SAVED_SENT)] : [say(SAVED_CLOSED)];
 }
 
 // ---- clinic hours ----

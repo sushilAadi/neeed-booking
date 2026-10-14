@@ -74,6 +74,9 @@ export type Bucket = "signatures" | "prescriptions";
 export interface Store {
   doctorByBusinessNumber(phoneNumberId: string): Promise<Doctor | null>;
   doctorByPersonalPhone(phone: string): Promise<Doctor | null>;
+  doctorById(id: string): Promise<Doctor | null>;
+  /** The doctor's latest prescription texts, newest first (for medicine-name suggestions). */
+  prescribedTexts(doctorId: string): Promise<string[]>;
   updateDoctor(
     id: string,
     patch: Partial<Pick<Doctor, "registrationNumber" | "signaturePath">> &

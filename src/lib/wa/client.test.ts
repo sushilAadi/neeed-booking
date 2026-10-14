@@ -65,3 +65,30 @@ test("toGraph text and document", () => {
     document: { link: "L", filename: "f.pdf", caption: "c" },
   });
 });
+
+test("toGraph link button (cta_url)", () => {
+  expect(
+    toGraph("91", {
+      kind: "link",
+      body: "Write it here",
+      button: "Write prescription",
+      url: "https://x.test/rx/abc",
+    }),
+  ).toEqual({
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: "91",
+    type: "interactive",
+    interactive: {
+      type: "cta_url",
+      body: { text: "Write it here" },
+      action: {
+        name: "cta_url",
+        parameters: {
+          display_text: "Write prescription",
+          url: "https://x.test/rx/abc",
+        },
+      },
+    },
+  });
+});

@@ -32,6 +32,16 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
     async doctorByBusinessNumber(pn) {
       return doctors.find((d) => d.businessPhoneNumberId === pn) ?? null;
     },
+    async doctorById(id) {
+      return doctors.find((d) => d.id === id) ?? null;
+    },
+    async prescribedTexts(did) {
+      return appointments
+        .filter((a) => a.doctorId === did && a.prescriptionText)
+        .sort((a, b) => +b.startsAt - +a.startsAt)
+        .slice(0, 200)
+        .map((a) => a.prescriptionText as string);
+    },
     async doctorByPersonalPhone(p) {
       return doctors.find((d) => d.personalPhone === p) ?? null;
     },

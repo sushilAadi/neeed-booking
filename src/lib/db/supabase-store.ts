@@ -94,6 +94,24 @@ export function createSupabaseStore(): Store {
       );
       return r ? toDoctor(r) : null;
     },
+    async doctorById(id) {
+      const r = must(
+        await db.from("doctors").select("*").eq("id", id).maybeSingle(),
+      );
+      return r ? toDoctor(r) : null;
+    },
+    async prescribedTexts(did) {
+      const rows = must(
+        await db
+          .from("appointments")
+          .select("prescription_text")
+          .eq("doctor_id", did)
+          .not("prescription_text", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(200),
+      );
+      return (rows ?? []).map((r: Row) => r.prescription_text as string);
+    },
     async doctorByPersonalPhone(p) {
       const r = must(
         await db
