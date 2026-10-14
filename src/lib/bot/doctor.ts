@@ -1,3 +1,10 @@
+import { doctorWa } from "../clinic/activity";
+import {
+  blockSlot,
+  setClosedToday,
+  validateHours,
+} from "../clinic/availability";
+import { cancelVisits } from "../clinic/visits";
 import type {
   Appointment,
   Conversation,
@@ -7,9 +14,7 @@ import type {
 import { signRxToken } from "../rx/link";
 import { type Med, medSummary, parseRx, type Rx } from "../rx/parse";
 import {
-  crosses,
   lunchHours,
-  overlapsAny,
   PERIODS,
   type Period,
   parseRange,
@@ -19,7 +24,6 @@ import {
   type Range,
 } from "../slots";
 import { addDays, atIst, fmtDay, fmtRange, fmtTime } from "../time";
-import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
 import {
   completeVisit,
@@ -427,10 +431,18 @@ const clashWarning = (n: number): Out => ({
   ],
 });
 
+const asBot = (c: BotCtx) => doctorWa(c.doctor.name);
+
 async function close(c: BotCtx, conv: Conversation): Promise<Reply[]> {
-  const appts = await confirmedToday(c);
-  if (!appts.length) {
-    await c.store.setClosed(c.doctor.id, today(c.now).date, true);
+  const r = await setClosedToday(
+    c.store,
+    c.doctor,
+    true,
+    null,
+    asBot(c),
+    c.now,
+  );
+  if (!r.clash) {
     await saveState(c.store, conv, "idle");
     return [
       say(
@@ -439,7 +451,7 @@ async function close(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     ];
   }
   await saveState(c.store, conv, "close_confirm", { date: today(c.now).date });
-  return [clashWarning(appts.length)];
+  return [clashWarning(r.clash)];
 }
 
 async function closeConfirm(
@@ -449,7 +461,15 @@ async function closeConfirm(
 ): Promise<Reply[]> {
   // a warning shown on an earlier day: ask again about today's bookings
   if (conv.ctx.date !== today(c.now).date) return close(c, conv);
-  await c.store.setClosed(c.doctor.id, today(c.now).date, true);
+  const appts = await confirmedToday(c);
+  const { notices } = await setClosedToday(
+    c.store,
+    c.doctor,
+    true,
+    choice === "cn" ? "cancel" : "keep",
+    asBot(c),
+    c.now,
+  );
   await saveState(c.store, conv, "idle");
   if (choice === "keep")
     return [
@@ -457,46 +477,12 @@ async function closeConfirm(
         "Closed for today. Existing bookings are kept; no new bookings will be taken.",
       ),
     ];
-  const appts = await confirmedToday(c);
-  const notices = await cancelAndNotify(c, appts, null);
   return [
     say(
       `Closed for today. Cancelled ${appts.length} appointment(s); ${notices.length} patient(s) notified.`,
     ),
     ...notices,
   ];
-}
-
-/** Cancel as the doctor; returns a notice for each patient whose 24 h window is open. */
-export async function cancelAndNotify(
-  c: BotCtx,
-  appts: Appointment[],
-  reason: string | null,
-): Promise<Send[]> {
-  const out: Send[] = [];
-  for (const a of appts) {
-    await c.store.updateAppointment(a.id, {
-      status: "CANCELLED",
-      cancelledBy: "doctor",
-      cancelReason: reason,
-    });
-    if (
-      await windowOpen(
-        c.store,
-        c.doctor.businessPhoneNumberId,
-        a.patientPhone,
-        c.now,
-      )
-    )
-      out.push({
-        from: c.doctor.businessPhoneNumberId,
-        to: a.patientPhone,
-        msg: say(
-          `Sorry, ${c.doctor.name} has cancelled your appointment today (${fmtRange(a.startsAt, a.endsAt)}). Reason: ${reason ?? "doctor unavailable"}. Reply /book to pick another time if available.`,
-        ),
-      });
-  }
-  return out;
 }
 
 async function dcancelList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
@@ -547,7 +533,14 @@ async function dcancelDone(
     (x) => x.id === conv.ctx.appointmentId,
   );
   if (!a) return dcancelList(c, conv);
-  const notices = await cancelAndNotify(c, [a], reason);
+  const notices = await cancelVisits(
+    c.store,
+    c.doctor,
+    [a],
+    reason,
+    asBot(c),
+    c.now,
+  );
   await saveState(c.store, conv, "idle");
   return [
     say(
@@ -652,36 +645,31 @@ const pendingBlock = (conv: Conversation): PendingBlock => ({
   whole: conv.ctx.whole === true,
 });
 
-async function blockClashes(
-  c: BotCtx,
-  b: PendingBlock,
-): Promise<Appointment[]> {
-  const from = b.whole ? atIst(b.date, "00:00") : b.start;
-  const to = b.whole ? atIst(addDays(b.date, 1), "00:00") : b.end;
-  const appts = await c.store.appointmentsBetween(
-    c.doctor.id,
-    atIst(b.date, "00:00"),
-    atIst(addDays(b.date, 1), "00:00"),
-  );
-  return appts.filter(
-    (a) => a.status === "CONFIRMED" && a.startsAt < to && a.endsAt > from,
-  );
-}
+const asSlot = (b: PendingBlock) =>
+  b.whole ? ("whole" as const) : { start: b.start, end: b.end };
 
 async function blockCheck(
   c: BotCtx,
   conv: Conversation,
   b: PendingBlock,
 ): Promise<Reply[]> {
-  const clashes = await blockClashes(c, b);
-  if (!clashes.length) return blockApply(c, conv, b, []);
+  const r = await blockSlot(
+    c.store,
+    c.doctor,
+    b.date,
+    asSlot(b),
+    null,
+    asBot(c),
+    c.now,
+  );
+  if (!r.clash) return blockDone(c, conv, b, []);
   await saveState(c.store, conv, "block_confirm", {
     date: b.date,
     start: b.start.toISOString(),
     end: b.end.toISOString(),
     whole: b.whole,
   });
-  return [clashWarning(clashes.length)];
+  return [clashWarning(r.clash)];
 }
 
 async function blockConfirm(
@@ -690,21 +678,24 @@ async function blockConfirm(
   choice: "cn" | "keep",
 ): Promise<Reply[]> {
   const b = pendingBlock(conv);
-  const notices =
-    choice === "cn"
-      ? await cancelAndNotify(c, await blockClashes(c, b), null)
-      : [];
-  return blockApply(c, conv, b, notices);
+  const { notices } = await blockSlot(
+    c.store,
+    c.doctor,
+    b.date,
+    asSlot(b),
+    choice === "cn" ? "cancel" : "keep",
+    asBot(c),
+    c.now,
+  );
+  return blockDone(c, conv, b, notices);
 }
 
-async function blockApply(
+async function blockDone(
   c: BotCtx,
   conv: Conversation,
   b: PendingBlock,
   notices: Send[],
 ): Promise<Reply[]> {
-  if (b.whole) await c.store.setClosed(c.doctor.id, b.date, true);
-  else await c.store.addBlock(c.doctor.id, b.start, b.end);
   await saveState(c.store, conv, "idle");
   const day = fmtDay(atIst(b.date, "12:00"));
   return [
@@ -910,32 +901,8 @@ async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       return again(
         `Couldn't read that. Type it like "${k === "lunch" ? "1pm-2pm" : "9am-1pm"}", or tap a button.`,
       );
-    if (k === "lunch") {
-      const hit = PERIODS.find((p) => {
-        const ph = periodHours(c.doctor, p);
-        return ph && crosses(range, ph);
-      });
-      if (hit)
-        return again(
-          `That lunch break (${rangeText(range)}) runs into your ${hit} hours (${rangeText(periodHours(c.doctor, hit))}). Put it inside one period or between periods.`,
-        );
-    } else {
-      const lunch = lunchHours(c.doctor);
-      if (lunch && crosses(lunch, range))
-        return again(
-          `Your lunch break (${rangeText(lunch)}) would run into these hours. Change the lunch break first, or type different hours.`,
-        );
-    }
-    if (k !== "lunch") {
-      const clash = PERIODS.filter((p) => p !== k).find((p) => {
-        const other = periodHours(c.doctor, p);
-        return other && overlapsAny(range, [other]);
-      });
-      if (clash)
-        return again(
-          `That overlaps your ${clash} hours (${rangeText(periodHours(c.doctor, clash))}). Type different hours, or tap a button.`,
-        );
-    }
+    const why = validateHours(c.doctor, k, range);
+    if (why) return again(why);
     patch = { [`${k}Start`]: range.start, [`${k}End`]: range.end };
   }
 

@@ -192,7 +192,9 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
       acts.push({ ...a, id: id(), at });
     },
     async activity(did, opts) {
-      return acts
+      // newest first; entries with the same time keep the latest-written first
+      return [...acts]
+        .reverse()
         .filter(
           (a) =>
             a.doctorId === did && (!opts.staffId || a.staffId === opts.staffId),

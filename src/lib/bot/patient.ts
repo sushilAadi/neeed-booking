@@ -1,6 +1,8 @@
+import { PATIENT_WA, record } from "../clinic/activity";
+import { bookToday, freeToday } from "../clinic/booking";
 import type { Appointment, Conversation } from "../db/types";
 import { rxNo } from "../rx/pdf";
-import { byPeriod, freeSlots, type Period, type Slot } from "../slots";
+import { byPeriod, type Period, type Slot } from "../slots";
 import { fmtDay, fmtRange, weekday } from "../time";
 import type { Out, Send } from "../wa/types";
 import { type BotCtx, input, platformId, saveState, say, today } from "./ctx";
@@ -258,19 +260,8 @@ async function startBook(c: PC, conv: Conversation): Promise<Reply[]> {
   return [namePrompt(c, lastName)];
 }
 
-async function todaysFree(c: PC): Promise<Slot[]> {
-  const t = today(c.now);
-  if (await c.store.isClosed(c.doctor.id, t.date)) return [];
-  const appts = await c.store.appointmentsBetween(c.doctor.id, t.from, t.to);
-  const blocks = await c.store.blocksBetween(c.doctor.id, t.from, t.to);
-  const busy = [
-    ...appts
-      .filter((a) => a.status === "CONFIRMED")
-      .map((a) => ({ start: a.startsAt, end: a.endsAt })),
-    ...blocks.map((b) => ({ start: b.startsAt, end: b.endsAt })),
-  ];
-  return freeSlots(c.doctor, t.date, busy, c.now);
-}
+const todaysFree = (c: PC): Promise<Slot[]> =>
+  freeToday(c.store, c.doctor, c.now);
 
 const PERIOD_ORDER: Period[] = ["morning", "afternoon", "evening"];
 
@@ -370,22 +361,22 @@ async function create(
   conv: Conversation,
   notes: string | null,
 ): Promise<Reply[]> {
-  const startsAt = new Date(conv.ctx.startsAt as string);
   const name = conv.ctx.name as string;
-  const endsAt = new Date(+startsAt + c.doctor.slotMinutes * 60_000);
-  const free = await todaysFree(c);
-  const res = free.some((s) => +s.start === +startsAt)
-    ? await c.store.createAppointment({
-        doctorId: c.doctor.id,
-        patientPhone: c.msg.from,
-        patientName: name,
-        startsAt,
-        endsAt,
-        notes,
-      })
-    : "slot_taken";
-  if (res === "slot_taken")
-    return [say(c.t.justTaken), ...(await periods(c, conv, conv.ctx))];
+  const r = await bookToday(
+    c.store,
+    c.doctor,
+    {
+      phone: c.msg.from,
+      name,
+      reason: notes,
+      startsAt: new Date(conv.ctx.startsAt as string),
+      source: "whatsapp",
+    },
+    PATIENT_WA,
+    c.now,
+  );
+  if (!r.ok) return [say(c.t.justTaken), ...(await periods(c, conv, conv.ctx))];
+  const res = r.appointment;
   await end(c, conv, "idle");
   return [
     say(c.t.confirmed(c.doctor.name, c.doctor.clinicName, when(res))),
@@ -460,6 +451,14 @@ async function cancelDone(
     cancelledBy: "patient",
     cancelReason: reason,
   });
+  await record(
+    c.store,
+    c.doctor.id,
+    PATIENT_WA,
+    "cancelled",
+    { appointmentId: a.id, detail: { reason } },
+    c.now,
+  );
   await end(c, conv, "idle");
   return [
     {
