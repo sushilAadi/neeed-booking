@@ -349,13 +349,11 @@ async function cancelList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Which appointment do you want to cancel?",
       button: "Select appointment",
-      rows: list
-        .slice(0, 10)
-        .map((a) => ({
-          id: `c:${a.id}`,
-          title: fmtRange(a.startsAt, a.endsAt),
-          description: a.patientName,
-        })),
+      rows: list.slice(0, 10).map((a) => ({
+        id: `c:${a.id}`,
+        title: fmtRange(a.startsAt, a.endsAt),
+        description: a.patientName,
+      })),
     },
   ];
 }
