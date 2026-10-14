@@ -1,54 +1,242 @@
 @import "tailwindcss";
 
-/* Neeed design tokens — expanded into the full system with the dashboard. */
+/*
+  Neeed design system — "the clinic desk".
+  Cool linen base, one ward-teal accent, status colours only for status.
+  Every text/background pair below meets WCAG AA (4.5:1).
+*/
 :root {
-  --bg: #f4f6f5;
+  --bg: #f3f5f2;
+  --wash: rgba(18, 104, 78, 0.07);
   --surface: #ffffff;
-  --ink: #14201c;
-  --muted: #56645f;
-  --line: #dbe3df;
-  --accent: #0f6b52;
+  --sunk: #eaeeea;
+  --ink: #0f1f1a;
+  --muted: #56655f;
+  --line: #d6ded9;
+  --accent: #12684e;
+  --accent-soft: #e2efe9;
   --accent-ink: #ffffff;
+  --wait: #8a5a12;
+  --wait-soft: #fbf0dc;
+  --ok: #12684e;
+  --ok-soft: #e2efe9;
+  --danger: #a83a2b;
+  --danger-soft: #f8e4e0;
+  --glass: rgba(243, 245, 242, 0.72);
+  --shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(15, 31, 26, 0.04), 0
+    8px 24px -12px rgba(15, 31, 26, 0.12);
+  --shadow-press: 0 1px 2px rgba(15, 31, 26, 0.06) inset;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d1412;
-    --surface: #151f1c;
-    --ink: #e7efeb;
-    --muted: #9db0a9;
-    --line: #26342f;
-    --accent: #46c59c;
+    --bg: #0b1311;
+    --wash: rgba(92, 201, 163, 0.08);
+    --surface: #131d1a;
+    --sunk: #0f1815;
+    --ink: #e6efeb;
+    --muted: #9ab0a8;
+    --line: #26352f;
+    --accent: #5cc9a3;
+    --accent-soft: #163029;
     --accent-ink: #06231a;
+    --wait: #f0b45a;
+    --wait-soft: #2e2311;
+    --ok: #5cc9a3;
+    --ok-soft: #163029;
+    --danger: #f08c7c;
+    --danger-soft: #34181a;
+    --glass: rgba(11, 19, 17, 0.7);
+    --shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px
+      rgba(0, 0, 0, 0.6);
+    --shadow-press: 0 1px 2px rgba(0, 0, 0, 0.4) inset;
     color-scheme: dark;
   }
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
+@theme inline {
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-display: var(--font-heading), var(--font-body), system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-wait: var(--wait);
+  --color-wait-soft: var(--wait-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
 }
 
+body {
+  background:
+    radial-gradient(120% 60% at 50% -10%, var(--wash), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-feature-settings: "tnum" 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Surfaces */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-color: var(--line);
+}
+.display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Controls — 44px minimum targets */
 .btn {
   display: inline-flex;
   min-height: 48px;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   border-radius: 14px;
   padding: 0 20px;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+.btn:active {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-press);
+}
+.btn:disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 .btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
+  box-shadow: 0 8px 20px -10px var(--accent);
 }
 .btn-ghost {
   border: 1px solid var(--line);
   background: var(--surface);
+  color: var(--ink);
 }
-.btn:focus-visible {
+.btn-danger {
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.btn-sm {
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+.field {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--sunk);
+  padding: 0 14px;
+  font-size: 16px; /* no iOS zoom */
+  color: var(--ink);
+}
+.field::placeholder {
+  color: var(--muted);
+}
+.field[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.chip {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.chip[aria-pressed="true"],
+.chip[aria-checked="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn:focus-visible,
+.chip:focus-visible,
+.field:focus-visible,
+a:focus-visible,
+button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Signature: the OPD token slip — time stub, perforation, details */
+.token {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+}
+.token-stub {
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 14px 6px;
+  border-right: 2px dashed var(--line);
+  position: relative;
+}
+.token-stub::before,
+.token-stub::after {
+  content: "";
+  position: absolute;
+  right: -9px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.token-stub::before {
+  top: -9px;
+}
+.token-stub::after {
+  bottom: -9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
 }
 
 /* Prescription page (/rx/[token]) */
