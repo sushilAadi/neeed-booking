@@ -1,102 +1,57 @@
 @import "tailwindcss";
 
+/* Neeed design tokens — expanded into the full system with the dashboard. */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-
-  /* Premium Palette */
-  --primary-lime: #c8e85e;
-  --primary-lime-hover: #b6d44c;
-  --sidebar-dark: #0f172a;
-  --sidebar-accent: #1e293b;
-  --sidebar-border: #334155;
-  --card-glass: rgba(255, 255, 255, 0.7);
-  --card-border: rgba(226, 232, 240, 0.8);
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --ink: #14201c;
+  --muted: #56645f;
+  --line: #dbe3df;
+  --accent: #0f6b52;
+  --accent-ink: #ffffff;
+  color-scheme: light;
 }
-
-@theme {
-  --font-sans: "Nunito", system-ui, -apple-system, sans-serif;
-  --color-primary-lime: var(--primary-lime);
-  --color-primary-lime-hover: var(--primary-lime-hover);
-  --color-sidebar-dark: var(--sidebar-dark);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-card-glass: var(--card-glass);
-  --color-card-border: var(--card-border);
-
-  /* Reset all radius configurations to 0 */
-  --radius-xs: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
-  --radius-full: 0px;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1412;
+    --surface: #151f1c;
+    --ink: #e7efeb;
+    --muted: #9db0a9;
+    --line: #26342f;
+    --accent: #46c59c;
+    --accent-ink: #06231a;
+    color-scheme: dark;
+  }
 }
 
 body {
-  background:
-    radial-gradient(at 0% 0%, rgba(200, 232, 94, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
-    #f8fafc;
-  color: var(--foreground);
-  font-family: "Nunito", system-ui, -apple-system, sans-serif;
-  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--ink);
 }
 
-/* Glassmorphism Styles */
-.glass-panel {
-  background: var(--card-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--card-border);
+.btn {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  padding: 0 20px;
+  font-weight: 600;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-ghost {
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* Custom Premium Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.1);
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(15, 23, 42, 0.3);
-}
-
-/* Pulse animation for active slots and toast alarms */
-@keyframes soft-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(0.98);
-  }
-}
-
-.animate-pulse-soft {
-  animation: soft-pulse 2s infinite ease-in-out;
-}
-
-/* Absolute zero border radius override for premium sharp aesthetic */
-*,
-::before,
-::after {
-  border-radius: 0px;
-}
-
-/* ---- Prescription page: warm paper, clinical green, sand (matches the PDF) ---- */
+/* Prescription page (/rx/[token]) */
 .rx-shell {
   --rx-paper: #f7f5f0;
   --rx-card: #ffffff;
