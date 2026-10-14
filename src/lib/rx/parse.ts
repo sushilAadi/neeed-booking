@@ -4,7 +4,10 @@ export type Dose = [number, number, number]; // morning, afternoon, night
 export type Med = {
   name: string;
   dose: Dose | null;
-  food: "before" | "after" | null;
+  /** Take only when needed (SOS). */
+  sos?: true;
+  /** "any" = no food instruction (doctor chose "Any time"). */
+  food: "before" | "after" | "any" | null;
   duration: string | null;
 };
 export type Rx = { meds: Med[]; advice: string[] };
@@ -24,6 +27,9 @@ const ABBR_RE = /\b(od|bd|bid|tds|tid|hs)\b/i;
 const AFTER = /\b(?:after\s+(?:food|meals?|breakfast|lunch|dinner)|af|a\/f)\b/i;
 const BEFORE =
   /\b(?:before\s+(?:food|meals?|breakfast|lunch|dinner)|empty\s+stomach|bf|b\/f)\b/i;
+const SOS = /\b(?:sos|prn|when\s+needed)\b/i;
+const ANY_TIME = /\bany\s*time\b/i;
+const ONGOING = /\b(?:ongoing|continue|continuous)\b/i;
 const DURATION = /\b(\d+)\s*(d|days?|w|wks?|weeks?|months?|mo)\b/i;
 
 const num = (s: string) => (s === "½" ? 0.5 : Number(s));
@@ -50,6 +56,12 @@ function parseLine(line: string): Med {
       rest = rest.replace(a[0], " ");
     }
   }
+  let sos = false;
+  const so = SOS.exec(rest);
+  if (so) {
+    sos = true;
+    rest = rest.replace(so[0], " ");
+  }
   let food: Med["food"] = null;
   const after = AFTER.exec(rest);
   const before = BEFORE.exec(rest);
@@ -59,19 +71,35 @@ function parseLine(line: string): Med {
   } else if (before) {
     food = "before";
     rest = rest.replace(before[0], " ");
+  } else {
+    const any = ANY_TIME.exec(rest);
+    if (any) {
+      food = "any";
+      rest = rest.replace(any[0], " ");
+    }
   }
   let duration: string | null = null;
   const t = DURATION.exec(rest);
+  const og = ONGOING.exec(rest);
   if (t) {
     duration = durationText(Number(t[1]), t[2]);
     rest = rest.replace(t[0], " ");
+  } else if (og) {
+    duration = "Ongoing";
+    rest = rest.replace(og[0], " ");
   }
   const name = rest
     .replace(/\s+[|,–-]+(?=\s|$)/g, " ") // separators left between removed parts
     .replace(/^[\s|,–-]+|[\s|,–-]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
-  return { name: name || line.trim(), dose, food, duration };
+  return {
+    name: name || line.trim(),
+    dose,
+    ...(sos ? { sos: true as const } : {}),
+    food,
+    duration,
+  };
 }
 
 export function parseRx(text: string): Rx {
@@ -88,4 +116,42 @@ export function parseRx(text: string): Rx {
     meds.push(parseLine(line));
   }
   return { meds, advice };
+}
+
+const fmtN = (n: number) => (n === 0.5 ? "½" : String(n));
+
+/** The shorthand line for a medicine; parseRx reads it back to the same Med. */
+export function formatMed(m: Med): string {
+  const parts = [m.name];
+  if (m.dose) parts.push(m.dose.map(fmtN).join("-"));
+  if (m.sos) parts.push("SOS");
+  if (m.food === "after") parts.push("AF");
+  if (m.food === "before") parts.push("BF");
+  if (m.food === "any") parts.push("any time");
+  if (m.duration) parts.push(m.duration === "Ongoing" ? "ongoing" : m.duration);
+  return parts.join(" ");
+}
+
+const SLOT = ["Morning", "Afternoon", "Night"];
+
+/** "Augmentin 625 — Morning, Night · After food · 3 days" */
+export function medSummary(m: Med): string {
+  const when = m.dose
+    ? m.dose
+        .map((v, k) => (v ? `${v === 1 ? "" : `${fmtN(v)} `}${SLOT[k]}` : ""))
+        .filter(Boolean)
+        .join(", ")
+    : m.sos
+      ? "When needed"
+      : "";
+  const food =
+    m.food === "after"
+      ? "After food"
+      : m.food === "before"
+        ? "Before food"
+        : m.food === "any"
+          ? "Any time"
+          : "";
+  const bits = [when, food, m.duration ?? ""].filter(Boolean);
+  return bits.length ? `${m.name} — ${bits.join(" · ")}` : m.name;
 }

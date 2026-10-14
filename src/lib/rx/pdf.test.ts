@@ -66,3 +66,23 @@ test("unparsed lines and an empty prescription still render", async () => {
   ).toBe(1);
   expect(await pages(await renderPrescription({ ...base, text: "" }))).toBe(1);
 });
+
+test("structured rx input and SOS render", async () => {
+  const bytes = await renderPrescription({
+    ...base,
+    text: undefined,
+    rx: {
+      meds: [
+        {
+          name: "Dolo 650",
+          dose: null,
+          sos: true,
+          food: "any",
+          duration: "Ongoing",
+        },
+      ],
+      advice: ["Rest"],
+    },
+  });
+  expect(await pages(bytes)).toBe(1);
+});

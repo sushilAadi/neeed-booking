@@ -9,7 +9,7 @@ import {
   rgb,
 } from "pdf-lib";
 import { fmtPhone } from "../time";
-import { type Dose, type Med, parseRx } from "./parse";
+import { type Dose, type Med, parseRx, type Rx } from "./parse";
 
 export const rxNo = (appointmentId: string) =>
   `RX-${appointmentId.slice(0, 8).toUpperCase()}`;
@@ -28,6 +28,8 @@ export type RxInput = {
   time: string;
   /** Typed prescription (one medicine per line, "Advice: …" lines). */
   text?: string;
+  /** Already-structured prescription (from the guided questions); wins over `text`. */
+  rx?: Rx;
   /** Photo of a handwritten prescription. */
   photo?: Img;
   signature: Img;
@@ -61,6 +63,16 @@ const loadFont = (w: number) =>
 
 const roundedRect = (w: number, h: number, r: number) =>
   `M ${r} 0 H ${w - r} A ${r} ${r} 0 0 1 ${w} ${r} V ${h - r} A ${r} ${r} 0 0 1 ${w - r} ${h} H ${r} A ${r} ${r} 0 0 1 0 ${h - r} V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z`;
+
+/** Tags under a medicine name: food timing / SOS in sand, duration in green. */
+function chipList(m: Med): { text: string; tone: "sand" | "green" }[] {
+  const out: { text: string; tone: "sand" | "green" }[] = [];
+  if (m.sos) out.push({ text: "When needed", tone: "sand" });
+  if (m.food === "after") out.push({ text: "After food", tone: "sand" });
+  if (m.food === "before") out.push({ text: "Before food", tone: "sand" });
+  if (m.duration) out.push({ text: m.duration, tone: "green" });
+  return out;
+}
 
 type Row =
   | { kind: "med"; med: Med; lines: string[]; h: number }
@@ -123,11 +135,11 @@ export async function renderPrescription(i: RxInput): Promise<Uint8Array> {
     return out;
   };
 
-  const rx = parseRx(i.text ?? "");
+  const rx = i.rx ?? parseRx(i.text ?? "");
   const nameMax = COLS[0] - 40 - (M + CARD_PAD);
   const rows: Row[] = rx.meds.map((med) => {
     const lines = wrap(med.name, semi, 12.5, nameMax, 2);
-    const chips = med.food || med.duration;
+    const chips = chipList(med).length > 0;
     return {
       kind: "med",
       med,
@@ -345,21 +357,17 @@ export async function renderPrescription(i: RxInput): Promise<Uint8Array> {
       text(p, l, x, y, semi, 12.5);
       y -= 16;
     }
-    if (r.med.food || r.med.duration) {
-      let cx = x;
-      if (r.med.food)
-        cx +=
-          chip(
-            p,
-            r.med.food === "after" ? "After food" : "Before food",
-            cx,
-            y + 6,
-            C.sand,
-            C.sandInk,
-          ) + 6;
-      if (r.med.duration)
-        chip(p, r.med.duration, cx, y + 6, C.greenTint, C.green);
-    }
+    let cx = x;
+    for (const c of chipList(r.med))
+      cx +=
+        chip(
+          p,
+          c.text,
+          cx,
+          y + 6,
+          c.tone === "sand" ? C.sand : C.greenTint,
+          c.tone === "sand" ? C.sandInk : C.green,
+        ) + 6;
     if (r.med.dose) {
       const cy = top - r.h / 2;
       (r.med.dose as Dose).forEach((v, k) => {
