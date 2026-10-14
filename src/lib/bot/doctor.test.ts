@@ -190,3 +190,107 @@ test("doctor cancel when the patient's window is closed", async () => {
     "Cancelled. The patient couldn't be messaged (24-hour window closed).",
   ]);
 });
+
+// ---- Task 8: Block my time ----
+test("block custom 1pm-4:30pm on a future date → 'Blocked Fri, Jul 31 — 1:00 PM–4:30 PM.'", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const [dates] = await run(s, r("block"));
+  expect(dates.msg).toMatchObject({ kind: "list", button: "Choose a date" });
+  expect(ids(dates)).toHaveLength(7);
+  expect(ids(dates)[0]).toBe("d:2026-07-30");
+  expect(titles(dates)[1]).toBe("Fri, Jul 31");
+  const [ranges] = await run(s, r("d:2026-07-31"));
+  expect(ids(ranges)).toEqual([
+    "r:whole",
+    "r:morning",
+    "r:afternoon",
+    "r:custom",
+  ]);
+  expect(titles(ranges)).toEqual([
+    "Whole day",
+    "Morning",
+    "Afternoon",
+    "Particular time",
+  ]);
+  expect(bodies(await run(s, r("r:custom")))).toEqual([
+    'What time range? Type it like "2pm-5pm" or "14:00-17:00".',
+  ]);
+  expect(bodies(await run(s, t("1pm-4:30pm")))).toEqual([
+    "Blocked Fri, Jul 31 — 1:00 PM–4:30 PM.",
+  ]);
+  const blocks = await s.blocksBetween(
+    DOC.id,
+    atIst("2026-07-31", "00:00"),
+    atIst("2026-08-01", "00:00"),
+  );
+  expect(blocks).toHaveLength(1);
+  expect(blocks[0].startsAt).toEqual(atIst("2026-07-31", "13:00"));
+});
+
+test("invalid custom range re-prompts with the 'Couldn't read that' copy", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("block"));
+  await run(s, r("d:2026-07-31"));
+  await run(s, r("r:custom"));
+  expect(bodies(await run(s, t("after lunch")))).toEqual([
+    'Couldn\'t read that. Type it like "2pm-5pm" or "14:00-17:00".',
+  ]);
+});
+
+test("whole day → closure for that date", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("block"));
+  await run(s, r("d:2026-08-01"));
+  expect(bodies(await run(s, r("r:whole")))).toEqual([
+    "Blocked Sat, Aug 1 — whole day.",
+  ]);
+  expect(await s.isClosed(DOC.id, "2026-08-01")).toBe(true);
+});
+
+test("morning preset blocks the morning period", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("block"));
+  await run(s, r("d:2026-07-31"));
+  expect(bodies(await run(s, r("r:morning")))).toEqual([
+    "Blocked Fri, Jul 31 — 10:00 AM–2:00 PM.",
+  ]);
+});
+
+test("stale date tap outside the next 7 days re-shows the dates", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("block"));
+  const out = await run(s, r("d:2026-08-20"));
+  expect(ids(out[0])[0]).toBe("d:2026-07-30");
+});
+
+test("block clashing with today's booking → warning; cn cancels + notifies; keep leaves it", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await book(s, "919111", "14:30", "15:00");
+  await s.touchInbound("DOCPN", "919111", NOW);
+  await run(s, r("block"));
+  await run(s, r("d:2026-07-30"));
+  const warn = await run(s, r("r:afternoon"));
+  expect(bodies(warn)).toEqual([
+    "You have 1 confirmed appointment(s) today. What should happen to them?",
+  ]);
+  const out = await run(s, r("cn"));
+  expect(bodies(out)[0]).toBe("Blocked Thu, Jul 30 — 2:00 PM–6:00 PM.");
+  expect(out.filter((x) => x.to === "919111")).toHaveLength(1);
+  expect(s.appointments[0]).toMatchObject({
+    status: "CANCELLED",
+    cancelledBy: "doctor",
+  });
+
+  const s2 = createMemoryStore({ doctors: [DOC] });
+  await book(s2, "919111", "14:30", "15:00");
+  await run(s2, r("block"));
+  await run(s2, r("d:2026-07-30"));
+  await run(s2, r("r:afternoon"));
+  expect(bodies(await run(s2, r("keep")))).toEqual([
+    "Blocked Thu, Jul 30 — 2:00 PM–6:00 PM.",
+  ]);
+  expect(s2.appointments[0].status).toBe("CONFIRMED");
+  expect(
+    await s2.blocksBetween(DOC.id, at("00:00"), atIst("2026-07-31", "00:00")),
+  ).toHaveLength(1);
+});

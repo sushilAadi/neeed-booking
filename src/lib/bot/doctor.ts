@@ -1,5 +1,6 @@
 import type { Appointment, Conversation } from "../db/types";
-import { fmtRange } from "../time";
+import { parseRange, periodRange } from "../slots";
+import { addDays, atIst, fmtDay, fmtRange } from "../time";
 import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
 import { type BotCtx, input, platformId, saveState, say, today } from "./ctx";
@@ -46,6 +47,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     return [say("Open for bookings today.")];
   }
   if (i === "cancel" || i === "dcancel") return dcancelList(c, conv);
+  if (i === "block") return blockDates(c, conv);
 
   switch (conv.state) {
     case "close_confirm":
@@ -58,6 +60,35 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       if (i === "skip") return dcancelDone(c, conv, null);
       if (c.msg.type === "text" && clean(c.msg.text))
         return dcancelDone(c, conv, clean(c.msg.text));
+      return prompt(c, conv);
+    case "block_date":
+      if (i?.startsWith("d:")) return blockRanges(c, conv, i.slice(2));
+      return prompt(c, conv);
+    case "block_range":
+      if (i === "r:custom") {
+        await saveState(c.store, conv, "block_custom", conv.ctx);
+        return [say(CUSTOM_PROMPT)];
+      }
+      if (i === "r:whole" || i === "r:morning" || i === "r:afternoon")
+        return blockPreset(
+          c,
+          conv,
+          i.slice(2) as "whole" | "morning" | "afternoon",
+        );
+      return prompt(c, conv);
+    case "block_custom": {
+      const range = c.msg.type === "text" ? parseRange(c.msg.text ?? "") : null;
+      if (!range) return [say(`Couldn't read that. ${CUSTOM_HINT}`)];
+      const date = conv.ctx.date as string;
+      return blockCheck(c, conv, {
+        date,
+        start: atIst(date, range.start),
+        end: atIst(date, range.end),
+        whole: false,
+      });
+    }
+    case "block_confirm":
+      if (i === "cn" || i === "keep") return blockConfirm(c, conv, i);
       return prompt(c, conv);
     case "idle":
       return menu(c, conv);
@@ -268,13 +299,11 @@ async function dcancelList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Which appointment do you want to cancel?",
       button: "Select appointment",
-      rows: appts
-        .slice(0, 10)
-        .map((a) => ({
-          id: `dc:${a.id}`,
-          title: fmtRange(a.startsAt, a.endsAt),
-          description: a.patientName,
-        })),
+      rows: appts.slice(0, 10).map((a) => ({
+        id: `dc:${a.id}`,
+        title: fmtRange(a.startsAt, a.endsAt),
+        description: a.patientName,
+      })),
     },
   ];
 }
@@ -310,6 +339,131 @@ async function dcancelDone(
       notices.length
         ? "Cancelled and the patient was notified."
         : "Cancelled. The patient couldn't be messaged (24-hour window closed).",
+    ),
+    ...notices,
+  ];
+}
+
+const CUSTOM_HINT = 'Type it like "2pm-5pm" or "14:00-17:00".';
+const CUSTOM_PROMPT = `What time range? ${CUSTOM_HINT}`;
+
+type PendingBlock = { date: string; start: Date; end: Date; whole: boolean };
+
+const nextDates = (c: BotCtx) =>
+  Array.from({ length: 7 }, (_, n) => addDays(today(c.now).date, n));
+
+async function blockDates(c: BotCtx, conv: Conversation): Promise<Reply[]> {
+  await saveState(c.store, conv, "block_date");
+  return [
+    {
+      kind: "list",
+      body: "Which day do you want to block?",
+      button: "Choose a date",
+      rows: nextDates(c).map((d) => ({
+        id: `d:${d}`,
+        title: fmtDay(atIst(d, "12:00")),
+      })),
+    },
+  ];
+}
+
+async function blockRanges(
+  c: BotCtx,
+  conv: Conversation,
+  date: string,
+): Promise<Reply[]> {
+  if (!nextDates(c).includes(date)) return blockDates(c, conv);
+  await saveState(c.store, conv, "block_range", { date });
+  return [
+    {
+      kind: "list",
+      body: `What do you want to block on ${fmtDay(atIst(date, "12:00"))}?`,
+      button: "Choose a range",
+      rows: [
+        { id: "r:whole", title: "Whole day" },
+        { id: "r:morning", title: "Morning" },
+        { id: "r:afternoon", title: "Afternoon" },
+        { id: "r:custom", title: "Particular time" },
+      ],
+    },
+  ];
+}
+
+async function blockPreset(
+  c: BotCtx,
+  conv: Conversation,
+  p: "whole" | "morning" | "afternoon",
+): Promise<Reply[]> {
+  const date = conv.ctx.date as string;
+  const { start, end } = periodRange(c.doctor, date, p);
+  return blockCheck(c, conv, { date, start, end, whole: p === "whole" });
+}
+
+const pendingBlock = (conv: Conversation): PendingBlock => ({
+  date: conv.ctx.date as string,
+  start: new Date(conv.ctx.start as string),
+  end: new Date(conv.ctx.end as string),
+  whole: conv.ctx.whole === true,
+});
+
+async function blockClashes(
+  c: BotCtx,
+  b: PendingBlock,
+): Promise<Appointment[]> {
+  const from = b.whole ? atIst(b.date, "00:00") : b.start;
+  const to = b.whole ? atIst(addDays(b.date, 1), "00:00") : b.end;
+  const appts = await c.store.appointmentsBetween(
+    c.doctor.id,
+    atIst(b.date, "00:00"),
+    atIst(addDays(b.date, 1), "00:00"),
+  );
+  return appts.filter(
+    (a) => a.status === "CONFIRMED" && a.startsAt < to && a.endsAt > from,
+  );
+}
+
+async function blockCheck(
+  c: BotCtx,
+  conv: Conversation,
+  b: PendingBlock,
+): Promise<Reply[]> {
+  const clashes = await blockClashes(c, b);
+  if (!clashes.length) return blockApply(c, conv, b, []);
+  await saveState(c.store, conv, "block_confirm", {
+    date: b.date,
+    start: b.start.toISOString(),
+    end: b.end.toISOString(),
+    whole: b.whole,
+  });
+  return [clashWarning(clashes.length)];
+}
+
+async function blockConfirm(
+  c: BotCtx,
+  conv: Conversation,
+  choice: "cn" | "keep",
+): Promise<Reply[]> {
+  const b = pendingBlock(conv);
+  const notices =
+    choice === "cn"
+      ? await cancelAndNotify(c, await blockClashes(c, b), null)
+      : [];
+  return blockApply(c, conv, b, notices);
+}
+
+async function blockApply(
+  c: BotCtx,
+  conv: Conversation,
+  b: PendingBlock,
+  notices: Send[],
+): Promise<Reply[]> {
+  if (b.whole) await c.store.setClosed(c.doctor.id, b.date, true);
+  else await c.store.addBlock(c.doctor.id, b.start, b.end);
+  await saveState(c.store, conv, "idle");
+  const day = fmtDay(atIst(b.date, "12:00"));
+  return [
+    say(
+      `Blocked ${day} — ${b.whole ? "whole day" : fmtRange(b.start, b.end)}.`,
     ),
     ...notices,
   ];
