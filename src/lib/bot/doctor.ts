@@ -19,7 +19,15 @@ import {
 import { addDays, atIst, fmtDay, fmtRange, fmtTime } from "../time";
 import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
-import { type BotCtx, input, platformId, saveState, say, today } from "./ctx";
+import {
+  BACK,
+  type BotCtx,
+  input,
+  platformId,
+  saveState,
+  say,
+  today,
+} from "./ctx";
 
 type Reply = Out | Send;
 
@@ -79,17 +87,21 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
 
   switch (conv.state) {
     case "close_confirm":
+      if (i === "back") return menu(c, conv);
       if (i === "cn" || i === "keep") return closeConfirm(c, conv, i);
       return prompt(c, conv);
     case "dcancel_pick":
+      if (i === "back") return menu(c, conv);
       if (i?.startsWith("dc:")) return dcancelPick(c, conv, i.slice(3));
       return prompt(c, conv);
     case "dcancel_reason":
+      if (i === "back") return dcancelList(c, conv);
       if (i === "skip") return dcancelDone(c, conv, null);
       if (c.msg.type === "text" && clean(c.msg.text))
         return dcancelDone(c, conv, clean(c.msg.text));
       return prompt(c, conv);
     case "rx_input":
+      if (i === "back") return todayList(c, conv);
       if (i === "skip") return markDone(c, conv, null);
       if (c.msg.type === "text" && c.msg.text?.trim())
         return markDone(c, conv, { text: c.msg.text.trim() });
@@ -100,9 +112,11 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
         });
       return prompt(c, conv);
     case "block_date":
+      if (i === "back") return menu(c, conv);
       if (i?.startsWith("d:")) return blockRanges(c, conv, i.slice(2));
       return prompt(c, conv);
     case "block_range":
+      if (i === "back") return blockDates(c, conv);
       if (i === "r:custom") {
         await saveState(c.store, conv, "block_custom", conv.ctx);
         return [say(CUSTOM_PROMPT)];
@@ -115,6 +129,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
         );
       return prompt(c, conv);
     case "block_custom": {
+      if (i === "back") return blockRanges(c, conv, conv.ctx.date as string);
       const range = c.msg.type === "text" ? parseRange(c.msg.text ?? "") : null;
       if (!range) return [say(`Couldn't read that. ${CUSTOM_HINT}`)];
       const date = conv.ctx.date as string;
@@ -126,6 +141,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       });
     }
     case "block_confirm":
+      if (i === "back") return blockRanges(c, conv, conv.ctx.date as string);
       if (i === "cn" || i === "keep") return blockConfirm(c, conv, i);
       return prompt(c, conv);
     case "idle":
@@ -157,7 +173,7 @@ async function prompt(c: BotCtx, conv: Conversation): Promise<Reply[]> {
 const skipPrompt = (body: string): Out => ({
   kind: "buttons",
   body,
-  buttons: [{ id: "skip", title: "Skip" }],
+  buttons: [{ id: "skip", title: "Skip" }, BACK],
 });
 
 async function startSetup(c: BotCtx, conv: Conversation): Promise<Reply[]> {
@@ -243,11 +259,14 @@ async function todayList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Tap a patient once their visit is done to mark it complete and add a prescription.",
       button: "Mark complete",
-      rows: open.map((a) => ({
-        id: `done:${a.id}`,
-        title: a.patientName,
-        description: fmtRange(a.startsAt, a.endsAt),
-      })),
+      rows: [
+        ...open.slice(0, 9).map((a) => ({
+          id: `done:${a.id}`,
+          title: a.patientName,
+          description: fmtRange(a.startsAt, a.endsAt),
+        })),
+        BACK,
+      ],
     });
   return out;
 }
@@ -258,6 +277,7 @@ const clashWarning = (n: number): Out => ({
   buttons: [
     { id: "cn", title: "Cancel & notify" },
     { id: "keep", title: "Keep bookings" },
+    BACK,
   ],
 });
 
@@ -345,11 +365,14 @@ async function dcancelList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Which appointment do you want to cancel?",
       button: "Select appointment",
-      rows: appts.slice(0, 10).map((a) => ({
-        id: `dc:${a.id}`,
-        title: fmtRange(a.startsAt, a.endsAt),
-        description: a.patientName,
-      })),
+      rows: [
+        ...appts.slice(0, 9).map((a) => ({
+          id: `dc:${a.id}`,
+          title: fmtRange(a.startsAt, a.endsAt),
+          description: a.patientName,
+        })),
+        BACK,
+      ],
     },
   ];
 }
@@ -391,7 +414,7 @@ async function dcancelDone(
 }
 
 const CUSTOM_HINT = 'Type it like "2pm-5pm" or "14:00-17:00".';
-const CUSTOM_PROMPT = `What time range? ${CUSTOM_HINT}`;
+const CUSTOM_PROMPT = `What time range? ${CUSTOM_HINT} (Type "back" to go back.)`;
 
 type PendingBlock = { date: string; start: Date; end: Date; whole: boolean };
 
@@ -405,10 +428,13 @@ async function blockDates(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Which day do you want to block?",
       button: "Choose a date",
-      rows: nextDates(c).map((d) => ({
-        id: `d:${d}`,
-        title: fmtDay(atIst(d, "12:00")),
-      })),
+      rows: [
+        ...nextDates(c).map((d) => ({
+          id: `d:${d}`,
+          title: fmtDay(atIst(d, "12:00")),
+        })),
+        BACK,
+      ],
     },
   ];
 }
@@ -430,6 +456,7 @@ async function blockRanges(
         { id: "r:morning", title: "Morning" },
         { id: "r:afternoon", title: "Afternoon" },
         { id: "r:custom", title: "Particular time" },
+        BACK,
       ],
     },
   ];
@@ -678,21 +705,27 @@ async function hoursMenu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "What do you want to change? Existing bookings are always kept.",
       button: "Change",
-      rows: HOURS_KEYS.map((k) => ({ id: `h:${k}`, title: LABEL[k] })),
+      rows: [
+        ...HOURS_KEYS.map((k) => ({ id: `h:${k}`, title: LABEL[k] })),
+        BACK,
+      ],
     },
   ];
 }
 
-function hoursQuestion(d: Doctor, k: HoursKey): Out {
+function hoursQuestion(d: Doctor, k: HoursKey, back: boolean): Out {
   if (k === "slot")
     return {
       kind: "list",
       body: `How long is each appointment? Now: ${d.slotMinutes} min.`,
       button: "Choose length",
-      rows: [15, 30, 45, 60].map((m) => ({
-        id: `s:${m}`,
-        title: `${m} minutes`,
-      })),
+      rows: [
+        ...[15, 30, 45, 60].map((m) => ({
+          id: `s:${m}`,
+          title: `${m} minutes`,
+        })),
+        ...(back ? [BACK] : []),
+      ],
     };
   const isLunch = k === "lunch";
   const now = isLunch
@@ -704,9 +737,14 @@ function hoursQuestion(d: Doctor, k: HoursKey): Out {
     buttons: [
       { id: "keep", title: "Keep current" },
       { id: "off", title: isLunch ? "No lunch break" : "Off" },
+      ...(back ? [BACK] : []),
     ],
   };
 }
+
+/** Back exists everywhere except the first question of first-time setup. */
+const hasBack = (k: HoursKey, mode: "setup" | "edit") =>
+  mode === "edit" || k !== "morning";
 
 async function askHours(
   c: BotCtx,
@@ -715,7 +753,7 @@ async function askHours(
   mode: "setup" | "edit",
 ): Promise<Reply[]> {
   await saveState(c.store, conv, `hrs_${k}`, { mode });
-  return [hoursQuestion(c.doctor, k)];
+  return [hoursQuestion(c.doctor, k, hasBack(k, mode))];
 }
 
 async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
@@ -724,8 +762,12 @@ async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   const i = input(c.msg);
   const again = (why?: string): Reply[] => [
     ...(why ? [say(why)] : []),
-    hoursQuestion(c.doctor, k),
+    hoursQuestion(c.doctor, k, hasBack(k, mode)),
   ];
+  if (i === "back" && hasBack(k, mode)) {
+    if (mode === "edit") return hoursMenu(c, conv);
+    return askHours(c, conv, HOURS_KEYS[HOURS_KEYS.indexOf(k) - 1], mode);
+  }
   let patch: HoursPatch = {};
 
   if (k === "slot") {
@@ -783,7 +825,7 @@ async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   if (!last) {
     const next = HOURS_KEYS[HOURS_KEYS.indexOf(k) + 1];
     await saveState(c.store, conv, `hrs_${next}`, { mode });
-    return [hoursQuestion(d, next)];
+    return [hoursQuestion(d, next, true)];
   }
   return [
     say(

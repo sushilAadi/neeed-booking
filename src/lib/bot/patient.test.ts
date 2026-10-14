@@ -14,6 +14,8 @@ import {
 } from "./test-kit";
 
 const P = "919111111111";
+const PERIODS_Q =
+  'Which part of today works for you?\n\nType "back" to change the name.';
 const run = (
   s: ReturnType<typeof createMemoryStore>,
   msg: Parameters<typeof handlePatient>[0]["msg"],
@@ -135,7 +137,7 @@ test("full booking: name → period → time → skip → confirmed + doctor ale
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "book"));
   const periods = await run(s, text(P, "Raj"));
-  expect(bodies(periods)).toEqual(["Which part of today works for you?"]);
+  expect(bodies(periods)).toEqual([PERIODS_Q]);
   expect(titles(periods[0])).toEqual([
     "Morning (8)",
     "Afternoon (8)",
@@ -144,7 +146,7 @@ test("full booking: name → period → time → skip → confirmed + doctor ale
   const times = await run(s, reply(P, "p:afternoon"));
   expect(times[0].msg).toMatchObject({ kind: "list", button: "Choose a time" });
   expect(titles(times[0])[0]).toBe("2:00 PM–2:30 PM");
-  expect(ids(times[0])).toHaveLength(8);
+  expect(ids(times[0])).toHaveLength(9); // 8 slots + Back
   expect(
     bodies(await run(s, reply(P, `t:${at("14:30").toISOString()}`))),
   ).toEqual([
@@ -209,9 +211,7 @@ test("returning patient gets a 'Yes, Raj' button and reply yesname uses it", asy
   const [m] = await run(s, reply(P, "book"));
   expect(ids(m)).toEqual(["yesname"]);
   expect(titles(m)).toEqual(["Yes, Raj Kumar"]);
-  expect(bodies(await run(s, reply(P, "yesname")))).toEqual([
-    "Which part of today works for you?",
-  ]);
+  expect(bodies(await run(s, reply(P, "yesname")))).toEqual([PERIODS_Q]);
   await run(s, reply(P, "p:evening"));
   await run(s, reply(P, `t:${at("18:00").toISOString()}`));
   await run(s, reply(P, "skip"));
@@ -227,6 +227,7 @@ test("period buttons hide empty periods and show counts", async () => {
   expect(titles((await run(s, text(P, "Raj")))[0])).toEqual([
     "Afternoon (8)",
     "Evening (8)",
+    "◀ Back",
   ]);
 });
 
@@ -238,21 +239,22 @@ test("no slots left today", async () => {
   ]);
 });
 
-test("more than 10 free slots in a period → 9 rows + Later times; more → the next page", async () => {
+test("more than 9 free slots in a period → 8 rows + Later times + Back; more → the next page", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const D15 = { ...DOC, slotMinutes: 15 };
   const [list] = await toTimes(s, "morning", D15);
   expect(ids(list)).toHaveLength(10);
-  expect(ids(list)[9]).toBe("more");
-  expect(titles(list)[9]).toBe("Later times");
+  expect(ids(list).slice(8)).toEqual(["more", "back"]);
+  expect(titles(list)[8]).toBe("Later times");
   const [next] = await handlePatient({
     store: s,
     doctor: D15,
     msg: reply(P, "more"),
     now: NOW,
   });
-  expect(ids(next)).toHaveLength(7);
-  expect(titles(next)[0]).toBe("12:15 PM–12:30 PM");
+  expect(ids(next)).toHaveLength(9);
+  expect(titles(next)[0]).toBe("12:00 PM–12:15 PM");
+  expect(ids(next)[8]).toBe("back");
 });
 
 test("stale slot tap: slot booked by someone else meanwhile → 'just taken' + period buttons again", async () => {
@@ -269,7 +271,7 @@ test("stale slot tap: slot booked by someone else meanwhile → 'just taken' + p
   const r = await run(s, reply(P, `t:${at("14:30").toISOString()}`));
   expect(bodies(r)).toEqual([
     "Sorry, that time was just taken. Please pick another.",
-    "Which part of today works for you?",
+    PERIODS_Q,
   ]);
   expect(titles(r[1])).toEqual(["Morning (8)", "Afternoon (7)", "Evening (8)"]);
 });
@@ -301,16 +303,14 @@ test("stale slot tap: a slot id that's now in the past → the period buttons ag
     reply(P, `t:${at("10:00").toISOString()}`),
     at("10:15"),
   );
-  expect(bodies(r)).toEqual(["Which part of today works for you?"]);
+  expect(bodies(r)).toEqual([PERIODS_Q]);
   expect(s.appointments).toHaveLength(0);
 });
 
 test("garbage slot id re-shows the periods", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await toTimes(s);
-  expect(bodies(await run(s, reply(P, "t:not-a-date")))).toEqual([
-    "Which part of today works for you?",
-  ]);
+  expect(bodies(await run(s, reply(P, "t:not-a-date")))).toEqual([PERIODS_Q]);
 });
 
 const seedToday = (s: ReturnType<typeof createMemoryStore>, phone = P) =>
@@ -331,8 +331,8 @@ test("cancel: pick → reason → cancelled; status CANCELLED, cancelledBy patie
     kind: "list",
     button: "Select appointment",
   });
-  expect(ids(list)).toEqual([`c:${a.id}`]);
-  expect(titles(list)).toEqual(["2:30 PM–3:00 PM"]);
+  expect(ids(list)).toEqual([`c:${a.id}`, "back"]);
+  expect(titles(list)).toEqual(["2:30 PM–3:00 PM", "◀ Back"]);
   expect(bodies(await run(s, reply(P, `c:${a.id}`)))).toEqual([
     "Got it. Any reason for cancelling? (optional — type it, or tap Skip)",
   ]);
@@ -363,7 +363,7 @@ test("cancel with an id from another patient's appointment is ignored and the li
   })) as { id: string };
   await run(s, reply(P, "cancel"));
   const r = await run(s, reply(P, `c:${other.id}`));
-  expect(ids(r[0])).toEqual([`c:${mineA.id}`]);
+  expect(ids(r[0])).toEqual([`c:${mineA.id}`, "back"]);
   expect(s.appointments.find((x) => x.id === other.id)?.status).toBe(
     "CONFIRMED",
   );
@@ -384,8 +384,8 @@ test("My Prescriptions sends the document with the signed link", async () => {
     prescriptionPdfPath: `${a.id}.pdf`,
   });
   const [list] = await run(s, reply(P, "rx"));
-  expect(ids(list)).toEqual([`rx:${a.id}`]);
-  expect(titles(list)).toEqual(["Thu, Jul 30"]);
+  expect(ids(list)).toEqual([`rx:${a.id}`, "back"]);
+  expect(titles(list)).toEqual(["Thu, Jul 30", "◀ Back"]);
   const [d] = await run(s, reply(P, `rx:${a.id}`));
   expect(d.msg).toEqual({
     kind: "document",
@@ -423,4 +423,80 @@ test("closed mid-booking: a period tap shows no slots", async () => {
   expect(bodies(await run(s, reply(P, "p:afternoon")))).toEqual([
     "Sorry, no slots are left today.",
   ]);
+});
+
+// ---- back ----
+test("time list → Back → period choice", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const [list] = await toTimes(s);
+  expect(ids(list).at(-1)).toBe("back");
+  expect(titles(list).at(-1)).toBe("◀ Back");
+  expect(bodies(await run(s, reply(P, "back")))[0]).toContain(
+    "Which part of today works for you?",
+  );
+});
+
+test("typed 'back' works too", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await toTimes(s);
+  expect(bodies(await run(s, text(P, "Back")))[0]).toContain(
+    "Which part of today works for you?",
+  );
+});
+
+test("period choice with 3 periods says to type back; with fewer it has a Back button; back → name", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, reply(P, "book"));
+  const three = await run(s, text(P, "Raj"));
+  expect(bodies(three)[0]).toBe(
+    'Which part of today works for you?\n\nType "back" to change the name.',
+  );
+  expect(ids(three[0])).toEqual(["p:morning", "p:afternoon", "p:evening"]);
+  const s2 = createMemoryStore({
+    doctors: [{ ...DOC, eveningStart: null, eveningEnd: null }],
+  });
+  await handlePatient({
+    store: s2,
+    doctor: { ...DOC, eveningStart: null, eveningEnd: null },
+    msg: reply(P, "book"),
+    now: NOW,
+  });
+  const two = await handlePatient({
+    store: s2,
+    doctor: { ...DOC, eveningStart: null, eveningEnd: null },
+    msg: text(P, "Raj"),
+    now: NOW,
+  });
+  expect(ids(two[0])).toEqual(["p:morning", "p:afternoon", "back"]);
+  expect(bodies(await run(s, text(P, "back")))).toEqual([
+    "Sure! What's the patient's full name?",
+  ]);
+});
+
+test("reason step: Back → the same time list", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await toTimes(s);
+  const reason = await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  expect(ids(reason[0])).toEqual(["skip", "back"]);
+  const [list] = await run(s, reply(P, "back"));
+  expect(list.msg).toMatchObject({ kind: "list", button: "Choose a time" });
+  expect(titles(list)[0]).toBe("2:00 PM–2:30 PM");
+  expect(s.appointments).toHaveLength(0);
+});
+
+test("cancel: list Back → menu; reason Back → list", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const a = (await seedToday(s)) as { id: string };
+  const [list] = await run(s, reply(P, "cancel"));
+  expect(ids(list)).toEqual([`c:${a.id}`, "back"]);
+  await run(s, reply(P, `c:${a.id}`));
+  expect(ids((await run(s, reply(P, "back")))[0])).toEqual([
+    `c:${a.id}`,
+    "back",
+  ]);
+  expect((await run(s, reply(P, "back")))[0].msg).toMatchObject({
+    kind: "list",
+    button: "Choose an option",
+  });
+  expect(s.appointments[0].status).toBe("CONFIRMED");
 });

@@ -45,3 +45,6 @@ export async function saveState(
 }
 
 export type { Send };
+
+/** Back row/button; typing "back" works on every step too. */
+export const BACK = { id: "back", title: "◀ Back" };

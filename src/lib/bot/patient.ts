@@ -3,7 +3,15 @@ import { rxNo } from "../rx/pdf";
 import { byPeriod, freeSlots, type Period, type Slot } from "../slots";
 import { fmtDay, fmtRange, weekday } from "../time";
 import type { Out, Send } from "../wa/types";
-import { type BotCtx, input, platformId, saveState, say, today } from "./ctx";
+import {
+  BACK,
+  type BotCtx,
+  input,
+  platformId,
+  saveState,
+  say,
+  today,
+} from "./ctx";
 
 const DAY = 24 * 3600_000;
 
@@ -50,6 +58,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       return gap ? menu(c, conv) : [];
     }
     case "book_name": {
+      if (i === "back") return menu(c, conv);
       const name =
         c.msg.type === "text"
           ? clean(c.msg.text)
@@ -60,9 +69,11 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       return periods(c, conv, { name });
     }
     case "book_period":
+      if (i === "back") return startBook(c, conv);
       if (i?.startsWith("p:")) return times(c, conv, i.slice(2) as Period, 0);
       return prompt(c, conv);
     case "book_time":
+      if (i === "back") return periods(c, conv, conv.ctx);
       if (i === "more")
         return times(
           c,
@@ -73,14 +84,23 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       if (i?.startsWith("t:")) return pickTime(c, conv, i.slice(2));
       return prompt(c, conv);
     case "book_reason":
+      if (i === "back")
+        return times(
+          c,
+          conv,
+          conv.ctx.period as Period,
+          Number(conv.ctx.page ?? 0),
+        );
       if (i === "skip") return create(c, conv, null);
       if (c.msg.type === "text" && clean(c.msg.text))
         return create(c, conv, clean(c.msg.text));
       return prompt(c, conv);
     case "cancel_pick":
+      if (i === "back") return menu(c, conv);
       if (i?.startsWith("c:")) return cancelPick(c, conv, i.slice(2));
       return prompt(c, conv);
     case "cancel_reason":
+      if (i === "back") return cancelList(c, conv);
       if (i === "skip") return cancelDone(c, conv, null);
       if (c.msg.type === "text" && clean(c.msg.text))
         return cancelDone(c, conv, clean(c.msg.text));
@@ -219,9 +239,13 @@ async function periods(
     return [say("Sorry, no slots are left today.")];
   }
   await saveState(c.store, conv, "book_period", { name: ctx.name });
-  return [
-    { kind: "buttons", body: "Which part of today works for you?", buttons },
-  ];
+  // WhatsApp allows 3 buttons; with all three periods shown, Back is typed instead.
+  if (buttons.length < 3) buttons.push(BACK);
+  const body =
+    buttons.length === 3 && buttons[2].id !== "back"
+      ? 'Which part of today works for you?\n\nType "back" to change the name.'
+      : "Which part of today works for you?";
+  return [{ kind: "buttons", body, buttons }];
 }
 
 async function times(
@@ -231,14 +255,17 @@ async function times(
   page: number,
 ): Promise<Reply[]> {
   const slots = byPeriod(c.doctor, await todaysFree(c))[period] ?? [];
-  const rest = slots.slice(page * 9);
+  // 10 rows max: up to 8 slots + "Later times" + Back, or up to 9 slots + Back.
+  const rest = slots.slice(page * 8);
   if (!rest.length) return periods(c, conv, conv.ctx);
-  const shown = rest.length > 10 ? rest.slice(0, 9) : rest;
+  const more = rest.length > 9;
+  const shown = more ? rest.slice(0, 8) : rest;
   const rows = shown.map((s) => ({
     id: `t:${s.start.toISOString()}`,
     title: fmtRange(s.start, s.end),
   }));
-  if (rest.length > 10) rows.push({ id: "more", title: "Later times" });
+  if (more) rows.push({ id: "more", title: "Later times" });
+  rows.push(BACK);
   await saveState(c.store, conv, "book_time", {
     name: conv.ctx.name,
     period,
@@ -276,6 +303,8 @@ async function pickTime(
   }
   await saveState(c.store, conv, "book_reason", {
     name: conv.ctx.name,
+    period: conv.ctx.period,
+    page: conv.ctx.page,
     startsAt: start.toISOString(),
   });
   return [reasonPrompt()];
@@ -285,7 +314,7 @@ function reasonPrompt(): Out {
   return {
     kind: "buttons",
     body: "Got it. Any specific concern or reason for the visit? (optional — type it, or tap Skip)",
-    buttons: [{ id: "skip", title: "Skip" }],
+    buttons: [{ id: "skip", title: "Skip" }, BACK],
   };
 }
 
@@ -350,11 +379,14 @@ async function cancelList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Which appointment do you want to cancel?",
       button: "Select appointment",
-      rows: list.slice(0, 10).map((a) => ({
-        id: `c:${a.id}`,
-        title: fmtRange(a.startsAt, a.endsAt),
-        description: a.patientName,
-      })),
+      rows: [
+        ...list.slice(0, 9).map((a) => ({
+          id: `c:${a.id}`,
+          title: fmtRange(a.startsAt, a.endsAt),
+          description: a.patientName,
+        })),
+        BACK,
+      ],
     },
   ];
 }
@@ -363,7 +395,7 @@ function cancelReasonPrompt(): Out {
   return {
     kind: "buttons",
     body: "Got it. Any reason for cancelling? (optional — type it, or tap Skip)",
-    buttons: [{ id: "skip", title: "Skip" }],
+    buttons: [{ id: "skip", title: "Skip" }, BACK],
   };
 }
 
@@ -413,7 +445,7 @@ async function cancelDone(
 async function withRx(c: BotCtx): Promise<Appointment[]> {
   return (await c.store.patientAppointments(c.doctor.id, c.msg.from))
     .filter((a) => a.prescriptionPdfPath)
-    .slice(0, 10);
+    .slice(0, 9);
 }
 
 async function rxList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
@@ -425,11 +457,14 @@ async function rxList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       kind: "list",
       body: "Your prescriptions:",
       button: "Choose a visit",
-      rows: list.map((a) => ({
-        id: `rx:${a.id}`,
-        title: fmtDay(a.startsAt),
-        description: a.patientName,
-      })),
+      rows: [
+        ...list.map((a) => ({
+          id: `rx:${a.id}`,
+          title: fmtDay(a.startsAt),
+          description: a.patientName,
+        })),
+        BACK,
+      ],
     },
   ];
 }

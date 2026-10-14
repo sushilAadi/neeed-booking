@@ -117,8 +117,8 @@ test("Today lists appointments and offers Mark complete for CONFIRMED only", asy
     button: "Mark complete",
     body: "Tap a patient once their visit is done to mark it complete and add a prescription.",
   });
-  expect(ids(out[1])).toEqual([`done:${a.id}`]);
-  expect(titles(out[1])).toEqual(["Raj"]);
+  expect(ids(out[1])).toEqual([`done:${a.id}`, "back"]);
+  expect(titles(out[1])).toEqual(["Raj", "◀ Back"]);
 });
 
 test("Today with none", async () => {
@@ -146,8 +146,12 @@ test("close with 2 bookings → warning; cn cancels both and notifies the patien
   expect(bodies(warn)).toEqual([
     "You have 2 confirmed appointment(s) today. What should happen to them?",
   ]);
-  expect(ids(warn[0])).toEqual(["cn", "keep"]);
-  expect(titles(warn[0])).toEqual(["Cancel & notify", "Keep bookings"]);
+  expect(ids(warn[0])).toEqual(["cn", "keep", "back"]);
+  expect(titles(warn[0])).toEqual([
+    "Cancel & notify",
+    "Keep bookings",
+    "◀ Back",
+  ]);
   const out = await run(s, r("cn"));
   const notices = out.filter((x) => x.to !== D);
   expect(notices).toHaveLength(1);
@@ -191,9 +195,9 @@ test("doctor cancel: dc:{id} → reason → cancelled + notice; dc: id of anothe
   })) as { id: string };
   await s.touchInbound("DOCPN", "919111", NOW);
   const list = await run(s, t("cancel"));
-  expect(ids(list[0])).toEqual([`dc:${a.id}`]);
+  expect(ids(list[0])).toEqual([`dc:${a.id}`, "back"]);
   const ignored = await run(s, r(`dc:${foreign.id}`));
-  expect(ids(ignored[0])).toEqual([`dc:${a.id}`]);
+  expect(ids(ignored[0])).toEqual([`dc:${a.id}`, "back"]);
   expect(bodies(await run(s, r(`dc:${a.id}`)))).toEqual([
     "Any reason to give the patient? (optional — type it, or tap Skip)",
   ]);
@@ -222,7 +226,7 @@ test("block custom 1pm-4:30pm on a future date → 'Blocked Fri, Jul 31 — 1:00
   const s = createMemoryStore({ doctors: [DOC] });
   const [dates] = await run(s, r("block"));
   expect(dates.msg).toMatchObject({ kind: "list", button: "Choose a date" });
-  expect(ids(dates)).toHaveLength(7);
+  expect(ids(dates)).toHaveLength(8); // 7 dates + Back;
   expect(ids(dates)[0]).toBe("d:2026-07-30");
   expect(titles(dates)[1]).toBe("Fri, Jul 31");
   const [ranges] = await run(s, r("d:2026-07-31"));
@@ -231,15 +235,17 @@ test("block custom 1pm-4:30pm on a future date → 'Blocked Fri, Jul 31 — 1:00
     "r:morning",
     "r:afternoon",
     "r:custom",
+    "back",
   ]);
   expect(titles(ranges)).toEqual([
     "Whole day",
     "Morning",
     "Afternoon",
     "Particular time",
+    "◀ Back",
   ]);
   expect(bodies(await run(s, r("r:custom")))).toEqual([
-    'What time range? Type it like "2pm-5pm" or "14:00-17:00".',
+    'What time range? Type it like "2pm-5pm" or "14:00-17:00". (Type "back" to go back.)',
   ]);
   expect(bodies(await run(s, t("1pm-4:30pm")))).toEqual([
     "Blocked Fri, Jul 31 — 1:00 PM–4:30 PM.",
@@ -485,7 +491,7 @@ test("first-time setup continues into clinic hours after the signature", async (
   );
   const slotQ = await run(s, t("12:30pm-1pm"));
   expect(slotQ[0].msg).toMatchObject({ kind: "list", button: "Choose length" });
-  expect(ids(slotQ[0])).toEqual(["s:15", "s:30", "s:45", "s:60"]);
+  expect(ids(slotQ[0])).toEqual(["s:15", "s:30", "s:45", "s:60", "back"]);
   const done = await run(s, r("s:15"));
   expect(bodies(done)[0]).toBe(
     'Setup saved. Reply "setup" any time to update your registration number or signature, or "hours" to change your clinic hours.',
@@ -549,6 +555,7 @@ test("hours from the menu: change lunch break; bookings are kept", async () => {
     "h:evening",
     "h:lunch",
     "h:slot",
+    "back",
   ]);
   expect(bodies(await run(s, r("h:lunch")))[0]).toContain(
     "Lunch break? Now: None.",
@@ -644,4 +651,56 @@ test("changing a period so the lunch break crosses it is rejected", async () => 
     "Your lunch break (12:30 PM–2:00 PM) would run into these hours. Change the lunch break first, or type different hours.",
   );
   expect((await s.doctorByPersonalPhone(D))?.afternoonStart).toBe("14:00");
+});
+
+// ---- back ----
+test("block: dates Back → menu; ranges Back → dates; custom 'back' → ranges", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const [dates] = await run(s, r("block"));
+  expect(ids(dates).at(-1)).toBe("back");
+  await run(s, r("d:2026-07-31"));
+  expect(ids((await run(s, r("back")))[0])[0]).toBe("d:2026-07-30");
+  await run(s, r("d:2026-07-31"));
+  await run(s, r("r:custom"));
+  expect(ids((await run(s, t("back")))[0])).toContain("r:custom");
+  await run(s, r("back"));
+  expect((await run(s, r("back")))[0].msg).toMatchObject({
+    kind: "list",
+    button: "Choose an option",
+  });
+});
+
+test("close warning Back → menu, nothing closed or cancelled", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await book(s, "919111", "14:30", "15:00");
+  const [warn] = await run(s, r("close"));
+  expect(ids(warn)).toEqual(["cn", "keep", "back"]);
+  await run(s, r("back"));
+  expect(await s.isClosed(DOC.id, "2026-07-30")).toBe(false);
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+});
+
+test("mark complete Back → Today list; doctor cancel reason Back → list", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const a = await book(s, "919111", "14:30", "15:00");
+  const rx = await run(s, r(`done:${a.id}`));
+  expect(ids(rx[0])).toEqual(["skip", "back"]);
+  expect(bodies(await run(s, r("back")))[0]).toContain("Today's appointments:");
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+  await run(s, r("dcancel"));
+  await run(s, r(`dc:${a.id}`));
+  expect(ids((await run(s, r("back")))[0])).toEqual([`dc:${a.id}`, "back"]);
+});
+
+test("hours: edit question Back → hours menu; setup Back → previous question", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("h:evening"));
+  const back = await run(s, r("back"));
+  expect(ids(back[1])).toContain("h:morning");
+  const s2 = createMemoryStore({ doctors: [{ ...DOC, hoursSet: false }] });
+  const first = await run(s2, t("hi"));
+  expect(ids(first[1])).toEqual(["keep", "off"]);
+  const second = await run(s2, r("keep"));
+  expect(ids(second[0])).toEqual(["keep", "off", "back"]);
+  expect(bodies(await run(s2, r("back")))[0]).toContain("Morning hours?");
 });
