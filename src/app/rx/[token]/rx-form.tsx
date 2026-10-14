@@ -103,7 +103,9 @@ export function RxForm(p: {
   const set = (key: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const add = () => {
-    const r = blank();
+    // New rows copy the last row's time / food / days, so the doctor only types names.
+    const last = rows.at(-1);
+    const r = last ? { ...last, key: next++, name: "" } : blank();
     setRows((rs) => [...rs, r]);
     requestAnimationFrame(() => nameRefs.current.get(r.key)?.focus());
   };
@@ -319,16 +321,13 @@ export function RxForm(p: {
 
       <div className="rx-bar">
         <div className="mx-auto flex max-w-xl items-center gap-3">
-          <p
-            className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--rx-muted)]"
-            role="status"
-          >
+          <output className="block min-w-0 flex-1 text-[13px] leading-snug text-[var(--rx-muted)]">
             {error ? (
               <span className="text-[var(--rx-warn)]">{error}</span>
             ) : (
               `${filled.length} ${filled.length === 1 ? "medicine" : "medicines"}`
             )}
-          </p>
+          </output>
           <button
             type="button"
             onClick={send}

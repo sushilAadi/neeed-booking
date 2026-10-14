@@ -140,3 +140,14 @@ test("medSummary reads like a sentence", () => {
     }),
   ).toBe("Dolo 650 — When needed");
 });
+
+test("the WhatsApp example parses when copied whole — backticks, header and rule line are ignored", () => {
+  const r = parseRx(
+    "```\nMedicine       Time   Food  Days\n─────────────────────────────────\nAugmentin 625  1-0-1  AF    5d\nPan 40         1-0-0  BF    7d\nAdvice: drink water\n```",
+  );
+  expect(r.meds.map(medSummary)).toEqual([
+    "Augmentin 625 — Morning, Night · After food · 5 days",
+    "Pan 40 — Morning · Before food · 7 days",
+  ]);
+  expect(r.advice).toEqual(["drink water"]);
+});

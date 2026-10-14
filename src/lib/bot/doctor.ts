@@ -110,31 +110,19 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     case "rx_input":
       if (i === "back") return todayList(c, conv);
       if (i === "skip") return markDone(c, conv, null);
-      if (c.msg.type === "text" && c.msg.text?.trim())
-        return rxNames(c, conv, c.msg.text);
       if (c.msg.type === "image" && c.msg.mediaId)
         return markDone(c, conv, {
           mediaId: c.msg.mediaId,
           caption: c.msg.caption?.trim(),
         });
+      if (c.msg.type === "text" && c.msg.text?.trim())
+        return rxTyped(c, conv, c.msg.text);
       return prompt(c, conv);
-    case "rx_q":
-      return rxAnswer(c, conv);
-    case "rx_advice":
-      if (i === "back") return rxBack(c, conv);
-      if (i === "noadvice")
-        return rxConfirm(c, conv, { ...rxCtx(conv), advice: [] });
-      if (c.msg.type === "text" && clean(c.msg.text))
-        return rxConfirm(c, conv, {
-          ...rxCtx(conv),
-          advice: [clean(c.msg.text)],
-        });
-      return [ADVICE_Q];
     case "rx_confirm":
-      if (i === "back") return rxAskAdvice(c, conv, rxCtx(conv));
-      if (i === "restart") {
+      if (i === "back" || i === "restart") {
         await saveState(c.store, conv, "rx_input", {
           appointmentId: conv.ctx.appointmentId,
+          patient: conv.ctx.patient,
         });
         return [RX_PROMPT];
       }
@@ -142,7 +130,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
         const x = rxCtx(conv);
         return markDone(c, conv, { rx: { meds: x.meds, advice: x.advice } });
       }
-      return [rxSummary(conv.ctx.patient as string, rxCtx(conv))];
+      return [rxSummary(rxCtx(conv))];
     case "block_date":
       if (i === "back") return menu(c, conv);
       if (i?.startsWith("d:")) return blockRanges(c, conv, i.slice(2));
@@ -585,8 +573,26 @@ async function blockApply(
   ];
 }
 
+const RX_INTRO = "*Or type it here* — one medicine per line:";
+const RX_KEY = [
+  "*Time* = Morning-Afternoon-Night _(1 = take, 0 = skip)_",
+  "*AF* = After Food · *BF* = Before Food",
+  "*Days* = how many days _(5d = 5 days)_",
+  "",
+  "_You can also send a photo, or tap Skip._",
+];
 const RX_PROMPT = skipPrompt(
-  "Or type the medicine names here, one per line (e.g. Augmentin 625), send a photo of the prescription, or tap Skip.",
+  [
+    RX_INTRO,
+    "```",
+    "Medicine       Time   Food  Days",
+    "─────────────────────────────────",
+    "Augmentin 625  1-0-1  AF    5d",
+    "Pan 40         1-0-0  BF    7d",
+    "Advice: drink water",
+    "```",
+    ...RX_KEY,
+  ].join("\n"),
 );
 
 /** Where the prescription page lives (Vercel sets the production host). */
@@ -818,17 +824,12 @@ async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   ];
 }
 
-// ---- guided prescription ----
-type Field = "when" | "food" | "days";
-const FIELDS: Field[] = ["when", "food", "days"];
-type Q = { i: number; f: Field };
+// ---- typed prescription: one message → check screen → Send ----
 type RxState = {
   appointmentId: string;
   patient: string;
   meds: Med[];
   advice: string[];
-  q?: Q;
-  hist: Q[];
 };
 
 const rxCtx = (conv: Conversation): RxState => ({
@@ -836,86 +837,18 @@ const rxCtx = (conv: Conversation): RxState => ({
   patient: (conv.ctx.patient as string) ?? "",
   meds: (conv.ctx.meds as Med[]) ?? [],
   advice: (conv.ctx.advice as string[]) ?? [],
-  q: conv.ctx.q as Q | undefined,
-  hist: (conv.ctx.hist as Q[]) ?? [],
 });
 
-const missing = (m: Med, f: Field) =>
-  f === "when"
-    ? !m.dose && !m.sos
-    : f === "food"
-      ? m.food === null
-      : m.duration === null;
-
-function firstMissing(meds: Med[]): Q | null {
-  for (let i = 0; i < meds.length; i++)
-    for (const f of FIELDS) if (missing(meds[i], f)) return { i, f };
-  return null;
-}
-
-const WHEN_ROWS = [
-  { id: "w:1-0-1", title: "Morning + Night", description: "1-0-1" },
-  { id: "w:1-0-0", title: "Morning only", description: "1-0-0" },
-  { id: "w:0-0-1", title: "Night only", description: "0-0-1" },
-  {
-    id: "w:1-1-1",
-    title: "All three times",
-    description: "Morning + Afternoon + Night · 1-1-1",
-  },
-  { id: "w:1-1-0", title: "Morning + Afternoon", description: "1-1-0" },
-  { id: "w:0-1-1", title: "Afternoon + Night", description: "0-1-1" },
-  { id: "w:0-1-0", title: "Afternoon only", description: "0-1-0" },
-  { id: "w:sos", title: "Only when needed (SOS)" },
-];
-const DAY_ROWS = [3, 5, 7, 10, 15].map((n) => ({
-  id: `d:${n}`,
-  title: `${n} days`,
-}));
-
-function rxQuestion(x: RxState, q: Q): Out {
-  const head = `💊 ${q.i + 1} of ${x.meds.length} · ${x.meds[q.i].name}`;
-  if (q.f === "when")
-    return {
-      kind: "list",
-      body: `${head}\nWhen should it be taken?\n(Different amount? Type it like 2-0-2.)`,
-      button: "Choose time",
-      rows: [...WHEN_ROWS, BACK],
-    };
-  if (q.f === "food")
-    return {
-      kind: "buttons",
-      body: `${head}\nBefore or after food?\n(Type "back" to go back.)`,
-      buttons: [
-        { id: "f:after", title: "After food" },
-        { id: "f:before", title: "Before food" },
-        { id: "f:any", title: "Any time" },
-      ],
-    };
-  return {
-    kind: "list",
-    body: `${head}\nFor how many days?\n(Or type a number, like 21.)`,
-    button: "Choose days",
-    rows: [
-      ...DAY_ROWS,
-      { id: "d:30", title: "1 month" },
-      { id: "d:ongoing", title: "Ongoing" },
-      BACK,
-    ],
-  };
-}
-
-const ADVICE_Q: Out = {
-  kind: "buttons",
-  body: "Any advice for the patient? Type it, or tap No advice.",
-  buttons: [{ id: "noadvice", title: "No advice" }, BACK],
-};
-
-function rxSummary(patient: string, x: RxState): Out {
-  const lines = x.meds.map((m, k) => `${k + 1}. ${medSummary(m)}`);
-  const adv = x.advice.length ? `\n\nAdvice: ${x.advice.join(" ")}` : "";
+/** Spelled out in words, so a misread line is caught before it reaches the patient. */
+function rxSummary(x: RxState): Out {
+  // WhatsApp *bold* on each medicine name (medSummary starts with the name).
+  const lines = x.meds.map(
+    (m, k) => `${k + 1}. *${m.name}*${medSummary(m).slice(m.name.length)}`,
+  );
+  const adv = x.advice.length ? `\n\n*Advice:* ${x.advice.join(" ")}` : "";
   return {
     kind: "buttons",
-    body: `Check the prescription for ${patient}:\n\n${lines.join("\n")}${adv}`,
+    body: `*Check the prescription for ${x.patient}:*\n\n${lines.join("\n")}${adv}`,
     buttons: [
       { id: "send", title: "Send to patient" },
       { id: "restart", title: "Start over" },
@@ -924,115 +857,21 @@ function rxSummary(patient: string, x: RxState): Out {
   };
 }
 
-const saveRx = (c: BotCtx, conv: Conversation, state: string, x: RxState) =>
-  saveState(c.store, conv, state, { ...x, q: x.q ?? null });
-
-/** Ask the next unanswered question, or move on to advice. */
-async function rxNext(
-  c: BotCtx,
-  conv: Conversation,
-  x: RxState,
-): Promise<Reply[]> {
-  const q = firstMissing(x.meds);
-  if (q) {
-    await saveRx(c, conv, "rx_q", { ...x, q });
-    return [rxQuestion(x, q)];
-  }
-  return x.advice.length ? rxConfirm(c, conv, x) : rxAskAdvice(c, conv, x);
-}
-
-async function rxAskAdvice(
-  c: BotCtx,
-  conv: Conversation,
-  x: RxState,
-): Promise<Reply[]> {
-  await saveRx(c, conv, "rx_advice", { ...x, q: undefined });
-  return [ADVICE_Q];
-}
-
-async function rxConfirm(
-  c: BotCtx,
-  conv: Conversation,
-  x: RxState,
-): Promise<Reply[]> {
-  await saveRx(c, conv, "rx_confirm", { ...x, q: undefined });
-  return [rxSummary(x.patient, x)];
-}
-
-async function rxNames(
+async function rxTyped(
   c: BotCtx,
   conv: Conversation,
   text: string,
 ): Promise<Reply[]> {
-  const parsed = parseRx(text);
+  // Long-press copy takes the whole prompt; drop its instruction lines, keep the example rows.
+  const skip = new Set([RX_INTRO, ...RX_KEY].map((l) => l.trim()));
+  const parsed = parseRx(
+    text
+      .split("\n")
+      .filter((l) => !skip.has(l.trim()))
+      .join("\n"),
+  );
   if (!parsed.meds.length) return [RX_PROMPT];
-  return rxNext(c, conv, {
-    ...rxCtx(conv),
-    meds: parsed.meds,
-    advice: parsed.advice,
-    hist: [],
-  });
-}
-
-/** Back: the previous question, or the names prompt when there is none. */
-async function rxBack(c: BotCtx, conv: Conversation): Promise<Reply[]> {
-  const x = rxCtx(conv);
-  const prev = x.hist.at(-1);
-  if (!prev) {
-    await saveState(c.store, conv, "rx_input", {
-      appointmentId: x.appointmentId,
-      patient: x.patient,
-    });
-    return [RX_PROMPT];
-  }
-  const y = { ...x, q: prev, hist: x.hist.slice(0, -1) };
-  await saveRx(c, conv, "rx_q", y);
-  return [rxQuestion(y, prev)];
-}
-
-async function rxAnswer(c: BotCtx, conv: Conversation): Promise<Reply[]> {
-  const x = rxCtx(conv);
-  const q = x.q;
-  if (!q || !x.meds[q.i]) return rxNext(c, conv, x);
-  const i = input(c.msg);
-  if (i === "back") return rxBack(c, conv);
-  const med = { ...x.meds[q.i] };
-  const typed = c.msg.type === "text" ? (c.msg.text ?? "") : "";
-
-  if (q.f === "when") {
-    if (i === "w:sos") {
-      med.sos = true;
-      med.dose = null;
-    } else {
-      const dose = i?.startsWith("w:")
-        ? parseRx(`x ${i.slice(2)}`).meds[0]?.dose
-        : parseRx(`x ${typed}`).meds[0]?.dose;
-      if (!dose) return [rxQuestion(x, q)];
-      med.dose = dose;
-      delete med.sos;
-    }
-  } else if (q.f === "food") {
-    const f =
-      i === "f:after" || /after/i.test(typed)
-        ? "after"
-        : i === "f:before" || /before/i.test(typed)
-          ? "before"
-          : i === "f:any" || /any/i.test(typed)
-            ? "any"
-            : null;
-    if (!f) return [rxQuestion(x, q)];
-    med.food = f;
-  } else {
-    let d: string | null = null;
-    if (i === "d:ongoing") d = "Ongoing";
-    else if (i === "d:30") d = "1 month";
-    else if (i?.startsWith("d:")) d = `${Number(i.slice(2))} days`;
-    else if (/^\s*\d+\s*$/.test(typed))
-      d = `${Number(typed)} ${Number(typed) === 1 ? "day" : "days"}`;
-    else d = parseRx(`x ${typed}`).meds[0]?.duration ?? null;
-    if (!d) return [rxQuestion(x, q)];
-    med.duration = d;
-  }
-  const meds = x.meds.map((m, k) => (k === q.i ? med : m));
-  return rxNext(c, conv, { ...x, meds, hist: [...x.hist, q], q: undefined });
+  const x = { ...rxCtx(conv), meds: parsed.meds, advice: parsed.advice };
+  await saveState(c.store, conv, "rx_confirm", x);
+  return [rxSummary(x)];
 }

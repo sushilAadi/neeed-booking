@@ -12,6 +12,7 @@ export type Med = {
 };
 export type Rx = { meds: Med[]; advice: string[] };
 
+const HEADER = /^medicine\s+time\b/i;
 const ADVICE = /^\s*(?:advice|adv)\s*[:\-–]\s*(.*)$/i;
 const DOSE =
   /(?<![\w.])(\d+(?:\.\d+)?|½)\s*-\s*(\d+(?:\.\d+)?|½)\s*-\s*(\d+(?:\.\d+)?|½)(?![\w.])/;
@@ -105,9 +106,10 @@ function parseLine(line: string): Med {
 export function parseRx(text: string): Rx {
   const meds: Med[] = [];
   const advice: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
+  // A copied example brings WhatsApp's ``` markers, the header row and the ─── line.
+  for (const raw of text.replaceAll("`", "").split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line) continue;
+    if (!line || /^[─━—_\-=\s]+$/.test(line) || HEADER.test(line)) continue;
     const a = ADVICE.exec(line);
     if (a) {
       if (a[1].trim()) advice.push(a[1].trim());

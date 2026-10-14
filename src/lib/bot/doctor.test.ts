@@ -328,8 +328,21 @@ test("block clashing with today's booking → warning; cn cancels + notifies; ke
 });
 
 // ---- Task 9: mark complete ----
-const RX_NAMES_Q =
-  "Or type the medicine names here, one per line (e.g. Augmentin 625), send a photo of the prescription, or tap Skip.";
+const RX_NAMES_Q = [
+  "*Or type it here* — one medicine per line:",
+  "```",
+  "Medicine       Time   Food  Days",
+  "─────────────────────────────────",
+  "Augmentin 625  1-0-1  AF    5d",
+  "Pan 40         1-0-0  BF    7d",
+  "Advice: drink water",
+  "```",
+  "*Time* = Morning-Afternoon-Night _(1 = take, 0 = skip)_",
+  "*AF* = After Food · *BF* = Before Food",
+  "*Days* = how many days _(5d = 5 days)_",
+  "",
+  "_You can also send a photo, or tap Skip._",
+].join("\n");
 const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
   const a = await book(s, "919111", "14:30", "15:00");
   if (patientWindowOpen) await s.touchInbound("DOCPN", "919111", NOW);
@@ -358,36 +371,50 @@ const sigStore = async () => {
   return s;
 };
 
-test("mark complete with text → COMPLETED, PDF stored, document sent, 'Saved and sent to the patient.'", async () => {
+test("typed prescription → check screen in words → Send: PDF stored and sent", async () => {
   const s = await sigStore();
   const a = await complete(s, true);
   const confirm = await run(
     s,
-    t("Paracetamol 500mg 1-0-1 AF 3 days\nAdvice: Rest 2 days"),
+    t(
+      "Augmentin 625  1-0-1  AF  5d\nPan D 40mg  2-0-2  BF  21d\nAdvice: Drink plenty of water",
+    ),
+  );
+  expect(bodies(confirm)[0]).toBe(
+    "*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan D 40mg* — 2 Morning, 2 Night · Before food · 21 days\n\n*Advice:* Drink plenty of water",
   );
   expect(ids(confirm[0])).toEqual(["send", "restart", "back"]);
   const out = await run(s, r("send"));
-  const doc = out.find((x) => x.msg.kind === "document");
-  expect(doc).toMatchObject({ from: "DOCPN", to: "919111" });
-  expect(doc?.msg).toMatchObject({
-    link: `mem://prescriptions/${a.id}.pdf`,
-    filename: `Prescription-RX-${a.id.slice(0, 8).toUpperCase()}.pdf`,
-    caption:
-      "Prescription from your visit on Thu, Jul 30, 2:30 PM–3:00 PM with Dr. Mehta.",
+  expect(out.find((x) => x.msg.kind === "document")).toMatchObject({
+    from: "DOCPN",
+    to: "919111",
   });
   expect(bodies(out.filter((x) => x.to === D))).toEqual([
     "Saved and sent to the patient.",
   ]);
   expect(s.appointments[0]).toMatchObject({
     status: "COMPLETED",
-    prescriptionText: "Paracetamol 500mg 1-0-1 AF 3 days\nAdvice: Rest 2 days",
     prescriptionPdfPath: `${a.id}.pdf`,
   });
-  expect(
-    new TextDecoder().decode(
-      s.files.get(`prescriptions/${a.id}.pdf`)?.slice(0, 5),
-    ),
-  ).toBe("%PDF-");
+});
+
+test("copying the whole prompt reads only the example rows", async () => {
+  const s = await sigStore();
+  await complete(s, true);
+  const confirm = await run(s, t(RX_NAMES_Q));
+  expect(bodies(confirm)[0]).toBe(
+    "*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan 40* — Morning · Before food · 7 days\n\n*Advice:* drink water",
+  );
+});
+
+test("typed prescription: Back and Start over return to the typing prompt, nothing saved", async () => {
+  const s = await sigStore();
+  await complete(s, true);
+  await run(s, t("Dolo 650 1-0-1 AF 3d"));
+  expect(bodies(await run(s, r("back")))).toEqual([RX_NAMES_Q]);
+  await run(s, t("Dolo 650 1-0-1 AF 3d"));
+  expect(bodies(await run(s, r("restart")))).toEqual([RX_NAMES_Q]);
+  expect(s.appointments[0].status).toBe("CONFIRMED");
 });
 
 test("mark complete with a photo stores the image and the PDF", async () => {
@@ -405,8 +432,7 @@ test("mark complete with a photo stores the image and the PDF", async () => {
 test("mark complete when the patient's window is closed → stored, no document, the window-closed copy", async () => {
   const s = await sigStore();
   await complete(s, false);
-  await run(s, t("Paracetamol 1-0-1 AF 3d\nAdvice: Rest"));
-  const out = await run(s, r("send"));
+  const out = await run(s, image(D, "RXPHOTO", undefined, undefined, PL));
   expect(out.some((x) => x.msg.kind === "document")).toBe(false);
   expect(bodies(out)).toEqual([
     "Saved. The patient's 24-hour window has closed, so they'll get it from \"My Prescriptions\" next time they message.",
@@ -719,94 +745,4 @@ test("hours: edit question Back → hours menu; setup Back → previous question
   const second = await run(s2, r("keep"));
   expect(ids(second[0])).toEqual(["keep", "off", "back"]);
   expect(bodies(await run(s2, r("back")))[0]).toContain("Morning hours?");
-});
-
-// ---- guided prescription ----
-const WHEN_IDS = [
-  "w:1-0-1",
-  "w:1-0-0",
-  "w:0-0-1",
-  "w:1-1-1",
-  "w:1-1-0",
-  "w:0-1-1",
-  "w:0-1-0",
-  "w:sos",
-  "back",
-];
-
-test("guided prescription: names → when / food / days per medicine → advice → confirm → send", async () => {
-  const s = await sigStore();
-  const a = await complete(s, true);
-  const when1 = await run(s, t("Augmentin 625\nPan D 40mg"));
-  expect(when1[0].msg).toMatchObject({ kind: "list", button: "Choose time" });
-  expect(bodies(when1)[0]).toBe(
-    "💊 1 of 2 · Augmentin 625\nWhen should it be taken?\n(Different amount? Type it like 2-0-2.)",
-  );
-  expect(ids(when1[0])).toEqual(WHEN_IDS);
-  const food = await run(s, r("w:1-0-1"));
-  expect(bodies(food)[0]).toBe(
-    '💊 1 of 2 · Augmentin 625\nBefore or after food?\n(Type "back" to go back.)',
-  );
-  expect(ids(food[0])).toEqual(["f:after", "f:before", "f:any"]);
-  const days = await run(s, r("f:after"));
-  expect(days[0].msg).toMatchObject({ kind: "list", button: "Choose days" });
-  expect(ids(days[0])).toEqual([
-    "d:3",
-    "d:5",
-    "d:7",
-    "d:10",
-    "d:15",
-    "d:30",
-    "d:ongoing",
-    "back",
-  ]);
-  expect(bodies(await run(s, r("d:3")))[0]).toContain("💊 2 of 2 · Pan D 40mg");
-  await run(s, t("2-0-2"));
-  await run(s, r("f:before"));
-  const adv = await run(s, t("21"));
-  expect(bodies(adv)[0]).toBe(
-    "Any advice for the patient? Type it, or tap No advice.",
-  );
-  expect(ids(adv[0])).toEqual(["noadvice", "back"]);
-  const confirm = await run(s, t("Drink plenty of water"));
-  expect(bodies(confirm)[0]).toBe(
-    "Check the prescription for Raj:\n\n1. Augmentin 625 — Morning, Night · After food · 3 days\n2. Pan D 40mg — 2 Morning, 2 Night · Before food · 21 days\n\nAdvice: Drink plenty of water",
-  );
-  const out = await run(s, r("send"));
-  expect(out.some((x) => x.msg.kind === "document")).toBe(true);
-  expect(s.appointments[0]).toMatchObject({
-    status: "COMPLETED",
-    prescriptionText:
-      "Augmentin 625 1-0-1 AF 3 days\nPan D 40mg 2-0-2 BF 21 days\nAdvice: Drink plenty of water",
-    prescriptionPdfPath: `${a.id}.pdf`,
-  });
-});
-
-test("guided prescription: Back steps through the questions", async () => {
-  const s = await sigStore();
-  await complete(s, true);
-  await run(s, t("Augmentin 625\nPan D"));
-  await run(s, r("w:1-0-1"));
-  expect(ids((await run(s, t("back")))[0])).toEqual(WHEN_IDS); // food → when
-  expect(bodies(await run(s, r("back")))).toEqual([RX_NAMES_Q]); // first question → names
-  await run(s, t("Dolo 650"));
-  await run(s, r("w:sos"));
-  await run(s, r("f:any"));
-  const adv = await run(s, r("d:ongoing"));
-  expect(bodies(adv)[0]).toContain("Any advice");
-  expect(bodies(await run(s, r("back")))[0]).toContain("For how many days?"); // advice → last question
-});
-
-test("guided prescription: unreadable answers repeat the question; Start over returns to names", async () => {
-  const s = await sigStore();
-  await complete(s, true);
-  await run(s, t("Augmentin 625"));
-  expect(ids((await run(s, t("sometimes")))[0])).toEqual(WHEN_IDS);
-  await run(s, r("w:1-0-0"));
-  await run(s, r("f:after"));
-  expect(bodies(await run(s, t("a while")))[0]).toContain("For how many days?");
-  await run(s, r("d:5"));
-  await run(s, r("noadvice"));
-  expect(bodies(await run(s, r("restart")))).toEqual([RX_NAMES_Q]);
-  expect(s.appointments[0].status).toBe("CONFIRMED");
 });
