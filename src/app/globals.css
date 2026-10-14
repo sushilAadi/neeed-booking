@@ -234,7 +234,9 @@ button:focus-visible {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every component rule */
     transition-duration: 0ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every component rule */
     animation-duration: 0ms !important;
   }
 }
@@ -403,5 +405,39 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .rx-slot {
     transition: none;
+  }
+}
+
+/* Sheets (native <dialog>) */
+.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.35);
+}
+.sheet[open] {
+  animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sheet::backdrop {
+  background: rgba(8, 16, 13, 0.45);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+@media (min-width: 768px) {
+  .sheet {
+    margin: auto;
+    border-bottom: 1px solid var(--line);
+    border-radius: 24px;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
   }
 }

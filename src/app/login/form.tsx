@@ -26,7 +26,7 @@ export function LoginForm() {
           className="field display tracking-[0.12em] uppercase"
         />
       </label>
-      <p id="key-help" role="status" className="min-h-5 text-sm">
+      <output id="key-help" className="block min-h-5 text-sm">
         {state.message ? (
           <span className="text-danger">{state.message}</span>
         ) : (
@@ -34,7 +34,7 @@ export function LoginForm() {
             The key you saved when your account or staff login was created.
           </span>
         )}
-      </p>
+      </output>
       <button type="submit" className="btn btn-primary" disabled={pending}>
         <KeyRound size={18} aria-hidden />
         {pending ? "Checking…" : "Log in"}

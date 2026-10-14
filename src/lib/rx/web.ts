@@ -1,6 +1,7 @@
 import { completeVisit } from "../bot/complete";
 import { platformId, say } from "../bot/ctx";
-import type { Store } from "../db/types";
+import { type Actor, doctorWa } from "../clinic/activity";
+import type { Appointment, Doctor, Store } from "../db/types";
 import { fmtDay, fmtRange } from "../time";
 import { deliver } from "../wa/deliver";
 import type { Send } from "../wa/types";
@@ -68,28 +69,73 @@ export async function submitRx(
   if (a.status !== "CONFIRMED")
     return { status: 409, message: "This visit is already completed." };
   const doctor = await store.doctorById(a.doctorId);
-  if (!doctor?.signaturePath)
+  if (!doctor) return { status: 404, message: "This visit no longer exists." };
+  const r = await submitRxFor(
+    store,
+    doctor,
+    a,
+    body,
+    now,
+    { actor: doctorWa(doctor.name), notifyDoctor: true },
+    send,
+  );
+  if (r.status === 200) {
+    // Leave the doctor's chat out of the "type the medicines" step.
+    const conv = await store.getConversation(
+      platformId(),
+      doctor.personalPhone,
+    );
+    if (conv.ctx.appointmentId === a.id)
+      await store.saveConversation({ ...conv, state: "idle", ctx: {} });
+  }
+  return r;
+}
+
+/**
+ * Completes a visit with a typed prescription: the PDF goes to the patient if their
+ * window is open. The WhatsApp link page also tells the doctor in WhatsApp; the
+ * dashboard doesn't (they're looking at it). Body may carry `fee` (rupees).
+ */
+export async function submitRxFor(
+  store: Store,
+  doctor: Doctor,
+  a: Appointment,
+  body: unknown,
+  now: Date,
+  opts: { actor: Actor; notifyDoctor: boolean },
+  send?: (s: Send) => Promise<void>,
+): Promise<SubmitResult> {
+  if (a.status !== "CONFIRMED")
+    return { status: 409, message: "This visit is already completed." };
+  if (!doctor.signaturePath)
     return {
       status: 409,
-      message: 'Finish prescription setup in WhatsApp first (send "setup").',
+      message:
+        'Add your registration number and signature first (Settings → Prescription setup, or send "setup" in WhatsApp).',
     };
   const rx = cleanRxPayload(body);
   if (!rx) return { status: 400, message: "Add at least one medicine name." };
+  const rawFee = (body as { fee?: unknown } | null)?.fee;
+  const fee =
+    typeof rawFee === "number" && Number.isInteger(rawFee) && rawFee >= 0
+      ? rawFee
+      : undefined;
 
-  const toPatient = await completeVisit(store, doctor, a, { rx }, now);
+  const toPatient = await completeVisit(store, doctor, a, { rx }, now, {
+    fee,
+    actor: opts.actor,
+  });
   const note = toPatient
     ? `Prescription for ${a.patientName} saved and sent to the patient.`
     : `Prescription for ${a.patientName} saved. Their 24-hour window has closed, so they'll get it from "My Prescriptions" next time they message.`;
   const sends: Send[] = [
     ...(toPatient ? [toPatient] : []),
-    { from: platformId(), to: doctor.personalPhone, msg: say(note) },
+    ...(opts.notifyDoctor
+      ? [{ from: platformId(), to: doctor.personalPhone, msg: say(note) }]
+      : []),
   ];
   // No sender on the web: every message goes through the 24 h window check.
   await deliver(store, sends, { from: "", to: "" }, now, send);
-  // Leave the doctor's chat out of the "type the medicines" step.
-  const conv = await store.getConversation(platformId(), doctor.personalPhone);
-  if (conv.ctx.appointmentId === a.id)
-    await store.saveConversation({ ...conv, state: "idle", ctx: {} });
   return {
     status: 200,
     message: toPatient

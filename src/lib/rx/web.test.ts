@@ -4,7 +4,7 @@ import { createMemoryStore } from "../db/memory-store";
 import { atIst } from "../time";
 import type { Send } from "../wa/types";
 import { signRxToken } from "./link";
-import { loadRxPage, submitRx } from "./web";
+import { loadRxPage, submitRx, submitRxFor } from "./web";
 
 const SECRET = "s";
 const setup = async () => {
@@ -102,4 +102,64 @@ test("submitRx rejects expired links and bad bodies", async () => {
       .status,
   ).toBe(400);
   expect(s.appointments[0].status).toBe("CONFIRMED");
+});
+
+// ---- the dashboard's Mark complete (logged-in staff, no token) ----
+const RIYA = { label: "Riya (Reception)", staffId: "s-riya" };
+
+test("submitRxFor (dashboard): completes with fee and actor; no WhatsApp note to the doctor", async () => {
+  const { s } = await setup();
+  await s.touchInbound("DOCPN", "919111", NOW);
+  await s.touchInbound("PLATFORM", DOC.personalPhone, NOW);
+  const sent: Send[] = [];
+  const a = s.appointments[0];
+  const r = await submitRxFor(
+    s,
+    DOC,
+    a,
+    { ...body, fee: 250 },
+    NOW,
+    { actor: RIYA, notifyDoctor: false },
+    async (x) => {
+      sent.push(x);
+    },
+  );
+  expect(r).toEqual({ status: 200, message: "Sent to the patient." });
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    fee: 250,
+    completedBy: "Riya (Reception)",
+  });
+  expect(sent.map((x) => x.to)).toEqual(["919111"]);
+});
+
+test("submitRxFor refuses a visit that is already completed", async () => {
+  const { s } = await setup();
+  const a = s.appointments[0];
+  await submitRxFor(
+    s,
+    DOC,
+    a,
+    body,
+    NOW,
+    { actor: RIYA, notifyDoctor: false },
+    async () => {},
+  );
+  expect(
+    await submitRxFor(
+      s,
+      DOC,
+      { ...a, status: "COMPLETED" },
+      body,
+      NOW,
+      { actor: RIYA, notifyDoctor: false },
+      async () => {},
+    ),
+  ).toEqual({ status: 409, message: "This visit is already completed." });
+});
+
+test("the WhatsApp link page records the doctor (WhatsApp) as who completed it", async () => {
+  const { s, token } = await setup();
+  await submitRx(s, token, body, NOW, SECRET, async () => {});
+  expect(s.appointments[0].completedBy).toBe("Dr. Mehta (WhatsApp)");
 });

@@ -84,19 +84,33 @@ function SlotIcon({ k }: { k: number }) {
   );
 }
 
+type Result = { ok: boolean; message: string; url?: string };
+type Payload = { meds: unknown[]; advice: string; fee?: number };
+
+/**
+ * The prescription form. From WhatsApp it posts to /api/rx/[token]; on the dashboard it
+ * calls server actions instead and also asks for the visit's fee.
+ */
 export function RxForm(p: {
-  token: string;
+  token?: string;
   patient: string;
   visit: string;
   clinic: string;
   doctor: string;
   suggestions: string[];
+  /** Dashboard: the standard fee, editable for this visit. */
+  fee?: number;
+  submit?: (payload: Payload) => Promise<Result>;
+  preview?: (payload: Payload) => Promise<Result>;
+  skip?: (fee: number) => Promise<Result>;
+  doneHref?: string;
 }) {
   const [rows, setRows] = useState<Row[]>(() => [blank()]);
   const [advice, setAdvice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  const [fee, setFee] = useState(p.fee === undefined ? "" : String(p.fee));
   const listId = useId();
   const nameRefs = useRef(new Map<number, HTMLInputElement>());
 
@@ -111,6 +125,56 @@ export function RxForm(p: {
   };
   const filled = rows.filter((r) => r.name.trim());
 
+  const payload = (): Payload => ({
+    meds: filled.map((r) => ({
+      name: r.name.trim(),
+      dose: r.sos ? null : (r.slots.map((on) => (on ? r.qty : 0)) as number[]),
+      ...(r.sos ? { sos: true } : {}),
+      food: r.food,
+      duration: r.days,
+    })),
+    advice,
+    ...(p.fee !== undefined ? { fee: Number(fee || 0) } : {}),
+  });
+
+  async function previewPdf() {
+    setError("");
+    if (!filled.length || !p.preview) {
+      setError("Add at least one medicine name.");
+      return;
+    }
+    // open the tab now (a click), fill it once the PDF is ready — popup blockers allow this
+    const tab = window.open("", "_blank");
+    setBusy(true);
+    try {
+      const r = await p.preview(payload());
+      if (r.ok && r.url && tab) tab.location.href = r.url;
+      else {
+        tab?.close();
+        setError(r.message);
+      }
+    } catch {
+      tab?.close();
+      setError("No connection. Check your internet and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function completeWithout() {
+    if (!p.skip) return;
+    setBusy(true);
+    try {
+      const r = await p.skip(Number(fee || 0));
+      if (r.ok) setDone(r.message);
+      else setError(r.message);
+    } catch {
+      setError("No connection. Check your internet and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function send() {
     setError("");
     if (!filled.length) {
@@ -118,6 +182,18 @@ export function RxForm(p: {
       return;
     }
     setBusy(true);
+    if (p.submit) {
+      try {
+        const r = await p.submit(payload());
+        if (r.ok) setDone(r.message);
+        else setError(r.message);
+      } catch {
+        setError("No connection. Check your internet and try again.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const meds = filled.map((r) => ({
         name: r.name.trim(),
@@ -152,9 +228,15 @@ export function RxForm(p: {
           </div>
           <h1 className="rx-display text-2xl">Prescription saved</h1>
           <p className="mt-2 text-[15px] text-[var(--rx-muted)]">{done}</p>
-          <p className="mt-6 text-sm text-[var(--rx-muted)]">
-            You can close this page and go back to WhatsApp.
-          </p>
+          {p.doneHref ? (
+            <a href={p.doneHref} className="rx-send mt-6 inline-flex">
+              Back to Today
+            </a>
+          ) : (
+            <p className="mt-6 text-sm text-[var(--rx-muted)]">
+              You can close this page and go back to WhatsApp.
+            </p>
+          )}
         </div>
       </main>
     );
@@ -163,6 +245,14 @@ export function RxForm(p: {
     <main className="rx-shell min-h-dvh px-4 pb-32 pt-6">
       <div className="mx-auto grid max-w-xl gap-5">
         <header className="grid gap-1">
+          {p.doneHref && (
+            <a
+              href={p.doneHref}
+              className="mb-2 text-[14px] font-semibold text-[var(--rx-green)]"
+            >
+              ← Today
+            </a>
+          )}
           <p className="rx-label">{p.clinic}</p>
           <h1 className="rx-display text-[26px] leading-tight">
             Prescription for {p.patient}
@@ -317,6 +407,51 @@ export function RxForm(p: {
             className="rx-input resize-y"
           />
         </label>
+
+        {p.fee !== undefined && (
+          <label className="grid gap-1.5">
+            <span className="rx-label">Fee for this visit (₹)</span>
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={fee}
+              onChange={(e) =>
+                setFee(e.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              className="rx-input"
+              aria-describedby="fee-help"
+            />
+            <span id="fee-help" className="text-[13px] text-[var(--rx-muted)]">
+              Your standard fee is filled in. Change it for this visit only,
+              e.g. 0 for a free follow-up.
+            </span>
+          </label>
+        )}
+
+        {(p.preview || p.skip) && (
+          <div className="flex flex-wrap gap-2">
+            {p.preview && (
+              <button
+                type="button"
+                onClick={previewPdf}
+                disabled={busy}
+                className="rx-add"
+              >
+                Preview PDF
+              </button>
+            )}
+            {p.skip && (
+              <button
+                type="button"
+                onClick={completeWithout}
+                disabled={busy}
+                className="rx-add"
+              >
+                Complete without prescription
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="rx-bar">
