@@ -14,6 +14,7 @@ import {
   type Period,
   parseRange,
   periodHours,
+  periodOf,
   periodRange,
   type Range,
 } from "../slots";
@@ -91,8 +92,17 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   if (i === "cancel" || i === "dcancel") return dcancelList(c, conv);
   if (i === "block") return blockDates(c, conv);
   if (i?.startsWith("done:")) return markStart(c, conv, i.slice(5));
+  if (i?.startsWith("tg:")) {
+    const [, g, page] = i.split(":");
+    return todayGroup(c, conv, g as Group, Number(page) || 0);
+  }
 
   switch (conv.state) {
+    case "today_group":
+      // one part of the day skips the picker, so Back goes to the menu
+      if (i === "back")
+        return conv.ctx.single ? menu(c, conv) : todayList(c, conv);
+      return todayGroup(c, conv, conv.ctx.group as Group, 0);
     case "close_confirm":
       if (i === "back") return menu(c, conv);
       if (i === "cn" || i === "keep") return closeConfirm(c, conv, i);
@@ -296,31 +306,114 @@ async function todays(c: BotCtx): Promise<Appointment[]> {
 const confirmedToday = async (c: BotCtx) =>
   (await todays(c)).filter((a) => a.status === "CONFIRMED");
 
+// ---- Today's patients: summary → part of the day → patients (paged) ----
+type Group = Period | "other";
+const GROUP_TITLE: Record<Group, string> = {
+  morning: "Morning",
+  afternoon: "Afternoon",
+  evening: "Evening",
+  other: "Other times", // booked before clinic hours changed
+};
+const PAGE = 8; // WhatsApp lists hold 10 rows: 8 patients + More + Back
+
+/** Still-to-see patients grouped by part of the day, in time order. */
+function waitingByGroup(c: BotCtx, all: Appointment[]) {
+  const by = new Map<Group, Appointment[]>();
+  for (const a of all) {
+    if (a.status !== "CONFIRMED") continue;
+    const g: Group =
+      periodOf(c.doctor, { start: a.startsAt, end: a.endsAt }) ?? "other";
+    by.set(g, [...(by.get(g) ?? []), a]);
+  }
+  return ([...PERIODS, "other"] as Group[])
+    .filter((g) => by.has(g))
+    .map((g) => ({ g, list: by.get(g) as Appointment[] }));
+}
+
+function todayCounts(all: Appointment[]): string {
+  const n = (st: string) => all.filter((a) => a.status === st).length;
+  return [
+    `⏳ ${n("CONFIRMED")} waiting`,
+    `✅ ${n("COMPLETED")} done`,
+    n("CANCELLED") ? `❌ ${n("CANCELLED")} cancelled` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 async function todayList(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   const all = await todays(c);
   await saveState(c.store, conv, "idle");
   if (!all.length) return [say("No appointments today.")];
-  const lines = all.map(
-    (a, n) =>
-      `${n + 1}. ${fmtRange(a.startsAt, a.endsAt)} — ${a.patientName} (+${a.patientPhone}) [${a.status}]`,
-  );
-  const out: Reply[] = [say(`Today's appointments:\n${lines.join("\n")}`)];
-  const open = all.filter((a) => a.status === "CONFIRMED").slice(0, 10);
-  if (open.length)
-    out.push({
+  const groups = waitingByGroup(c, all);
+  const head = `*Today's patients*\n${todayCounts(all)}`;
+  if (!groups.length) return [say(`${head}\n\nNo one is waiting. 🎉`)];
+  if (groups.length === 1) return todayGroup(c, conv, groups[0].g, 0);
+  return [
+    {
       kind: "list",
-      body: "Tap a patient once their visit is done to mark it complete and add a prescription.",
-      button: "Mark complete",
+      body: `${head}\n\nPick a part of the day to see who's waiting.`,
+      button: "Choose",
       rows: [
-        ...open.slice(0, 9).map((a) => ({
-          id: `done:${a.id}`,
-          title: a.patientName,
-          description: fmtRange(a.startsAt, a.endsAt),
+        ...groups.map(({ g, list }) => ({
+          id: `tg:${g}:0`,
+          title: `${GROUP_TITLE[g]} (${list.length})`,
+          description: `${list.length} waiting · ${fmtRange(list[0].startsAt, (list.at(-1) as Appointment).endsAt)}`,
         })),
         BACK,
       ],
-    });
-  return out;
+    },
+  ];
+}
+
+async function todayGroup(
+  c: BotCtx,
+  conv: Conversation,
+  g: Group,
+  page: number,
+): Promise<Reply[]> {
+  const all = await todays(c);
+  const groups = waitingByGroup(c, all);
+  const list = groups.find((x) => x.g === g)?.list ?? [];
+  if (!list.length) return todayList(c, conv);
+  const pages = Math.ceil(list.length / PAGE);
+  const p = Math.min(Math.max(page, 0), pages - 1);
+  const shown = list.slice(p * PAGE, p * PAGE + PAGE);
+  await saveState(c.store, conv, "today_group", {
+    group: g,
+    single: groups.length === 1,
+  });
+  const range =
+    pages > 1
+      ? ` (${p * PAGE + 1}–${p * PAGE + shown.length} of ${list.length})`
+      : "";
+  const next = p + 1 < pages ? p + 1 : 0; // the last page wraps to the first
+  return [
+    {
+      kind: "list",
+      body: `*${GROUP_TITLE[g]}* · ${list.length} waiting${range}\n\nTap a patient when their visit is done to mark it complete and write the prescription.`,
+      button: "Choose patient",
+      rows: [
+        ...shown.map((a) => ({
+          id: `done:${a.id}`,
+          title: a.patientName,
+          description: `${fmtRange(a.startsAt, a.endsAt)} · +${a.patientPhone}`,
+        })),
+        ...(pages > 1
+          ? [
+              {
+                id: `tg:${g}:${next}`,
+                title: next ? "More patients" : "Back to first",
+                description: next
+                  ? `Show ${next * PAGE + 1}–${Math.min((next + 1) * PAGE, list.length)} of ${list.length}`
+                  : `Show 1–${PAGE} of ${list.length}`,
+              },
+            ]
+          : []),
+        BACK,
+      ],
+    },
+  ];
 }
 
 const clashWarning = (n: number): Out => ({

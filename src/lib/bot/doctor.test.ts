@@ -103,22 +103,72 @@ test("menu shows 'Close today' when open and 'Open today' when closed", async ()
   ]);
 });
 
-test("Today lists appointments and offers Mark complete for CONFIRMED only", async () => {
+test("Today: one part of the day skips the picker and lists only waiting patients", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const a = await book(s, "919111", "14:30", "15:00", "Raj");
   const b = await book(s, "919222", "15:00", "15:30", "Sita");
+  const done = await book(s, "919333", "15:30", "16:00", "Om");
   await s.updateAppointment(b.id, { status: "CANCELLED" });
+  await s.updateAppointment(done.id, { status: "COMPLETED" });
   const out = await run(s, r("today"));
-  expect(bodies(out)[0]).toBe(
-    "Today's appointments:\n1. 2:30 PM–3:00 PM — Raj (+919111) [CONFIRMED]\n2. 3:00 PM–3:30 PM — Sita (+919222) [CANCELLED]",
-  );
-  expect(out[1].msg).toMatchObject({
+  expect(out).toHaveLength(1);
+  expect(out[0].msg).toMatchObject({
     kind: "list",
-    button: "Mark complete",
-    body: "Tap a patient once their visit is done to mark it complete and add a prescription.",
+    button: "Choose patient",
+    body: "*Afternoon* · 1 waiting\n\nTap a patient when their visit is done to mark it complete and write the prescription.",
   });
-  expect(ids(out[1])).toEqual([`done:${a.id}`, "back"]);
-  expect(titles(out[1])).toEqual(["Raj", "◀ Back"]);
+  expect(ids(out[0])).toEqual([`done:${a.id}`, "back"]);
+  expect(titles(out[0])).toEqual(["Raj", "◀ Back"]);
+  expect(ids((await run(s, r("back")))[0])).toContain("today"); // Back → menu, no loop
+});
+
+test("Today: several parts of the day → summary and a picker; Back returns to it", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await book(s, "919111", "10:00", "10:30", "Raj");
+  const done = await book(s, "919222", "11:00", "11:30", "Sita");
+  const eve = await book(s, "919333", "19:00", "19:30", "Om");
+  await s.updateAppointment(done.id, { status: "COMPLETED" });
+  const pick = await run(s, r("today"));
+  expect(bodies(pick)[0]).toBe(
+    "*Today's patients*\n⏳ 2 waiting · ✅ 1 done\n\nPick a part of the day to see who's waiting.",
+  );
+  expect(ids(pick[0])).toEqual(["tg:morning:0", "tg:evening:0", "back"]);
+  expect(titles(pick[0])).toEqual(["Morning (1)", "Evening (1)", "◀ Back"]);
+  const evening = await run(s, r("tg:evening:0"));
+  expect(ids(evening[0])).toEqual([`done:${eve.id}`, "back"]);
+  expect(ids((await run(s, r("back")))[0])).toEqual([
+    "tg:morning:0",
+    "tg:evening:0",
+    "back",
+  ]);
+});
+
+test("Today: 20 patients in one part of the day page 8 at a time, last page wraps", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  for (let n = 0; n < 20; n++) {
+    const m = 10 * 60 + n * 10;
+    const hm = (x: number) =>
+      `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
+    await book(s, `91900${n}`, hm(m), hm(m + 10), `P${n + 1}`);
+  }
+  const p1 = await run(s, r("today"));
+  expect(bodies(p1)[0]).toContain("*Morning* · 20 waiting (1–8 of 20)");
+  expect(titles(p1[0])).toEqual([
+    ...Array.from({ length: 8 }, (_, k) => `P${k + 1}`),
+    "More patients",
+    "◀ Back",
+  ]);
+  const p3 = await run(s, r("tg:morning:2"));
+  expect(bodies(p3)[0]).toContain("(17–20 of 20)");
+  expect(titles(p3[0])).toEqual([
+    "P17",
+    "P18",
+    "P19",
+    "P20",
+    "Back to first",
+    "◀ Back",
+  ]);
+  expect(ids(p3[0])).toContain("tg:morning:0");
 });
 
 test("Today with none", async () => {
@@ -748,7 +798,9 @@ test("mark complete Back → Today list; doctor cancel reason Back → list", as
   const a = await book(s, "919111", "14:30", "15:00");
   const rx = await run(s, r(`done:${a.id}`));
   expect(ids(rx[1])).toEqual(["skip", "back"]); // rx[0] is the page link
-  expect(bodies(await run(s, r("back")))[0]).toContain("Today's appointments:");
+  expect(bodies(await run(s, r("back")))[0]).toContain(
+    "*Afternoon* · 1 waiting",
+  );
   expect(s.appointments[0].status).toBe("CONFIRMED");
   await run(s, r("dcancel"));
   await run(s, r(`dc:${a.id}`));
