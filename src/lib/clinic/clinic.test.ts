@@ -4,7 +4,7 @@ import { createMemoryStore } from "../db/memory-store";
 import { atIst } from "../time";
 import { addBlockRange, setClosedToday, validateHours } from "./availability";
 import { bookToday, validatePatient } from "./booking";
-import { lastPatientDetails, normalizePhone } from "./patient";
+import { lastPatientDetails, normalizePhone, parseNameAge } from "./patient";
 import {
   cancelVisits,
   completeWithoutRx,
@@ -422,4 +422,20 @@ test("setFee edits a completed visit only, never negative, and logs it", async (
     ok: false,
     message: "This visit no longer exists.",
   });
+});
+
+test("parseNameAge: the number before or after the name is the age", () => {
+  expect(parseNameAge("Ramesh Kumar, 45")).toEqual({
+    name: "Ramesh Kumar",
+    age: 45,
+  });
+  expect(parseNameAge("45 Ramesh Kumar")).toEqual({
+    name: "Ramesh Kumar",
+    age: 45,
+  });
+  expect(parseNameAge("  Sita - 7 ")).toEqual({ name: "Sita", age: 7 });
+  expect(parseNameAge("राम, 60")).toEqual({ name: "राम", age: 60 });
+  expect(parseNameAge("Ramesh")).toEqual({ name: "Ramesh", age: null });
+  expect(parseNameAge("Ramesh 150")).toEqual({ name: "Ramesh 150", age: null });
+  expect(parseNameAge("45")).toEqual({ name: "", age: 45 });
 });

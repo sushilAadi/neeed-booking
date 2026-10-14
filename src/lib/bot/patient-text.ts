@@ -29,7 +29,12 @@ export type Text = {
   noToday: string;
   todayHead: string;
   status: Record<"CONFIRMED" | "CANCELLED" | "COMPLETED", string>;
-  askName: string;
+  askNameAge: string;
+  askAge: string;
+  badAge: string;
+  askGender: string;
+  gender: Record<"M" | "F" | "O", string>;
+  askArea: string;
   welcomeBack: (name: string) => string;
   yesName: (name: string) => string;
   notTaking: (doctor: string) => string;
@@ -94,7 +99,13 @@ export const TEXT: Record<Lang, Text> = {
       CANCELLED: "Cancelled",
       COMPLETED: "Completed",
     },
-    askName: "Sure! What's the patient's full name?",
+    askNameAge:
+      "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
+    askAge: "And the patient's age?",
+    badAge: "Please send the age as a number, like 45.",
+    askGender: "Patient's gender?",
+    gender: { M: "Male", F: "Female", O: "Other" },
+    askArea: "Which area or locality? (optional — type it, or tap Skip)",
     welcomeBack: (n) =>
       `Welcome back! Your last visit was booked for "${n}". Tap below to reuse that name, or type a different patient's name.`,
     yesName: (n) => `Yes, ${n}`,
@@ -159,7 +170,12 @@ export const TEXT: Record<Lang, Text> = {
     noToday: "आज कोई अपॉइंटमेंट नहीं है।",
     todayHead: "आज:",
     status: { CONFIRMED: "पक्की", CANCELLED: "रद्द", COMPLETED: "पूरी हुई" },
-    askName: "ज़रूर! मरीज़ का पूरा नाम क्या है?",
+    askNameAge: "ज़रूर! मरीज़ का पूरा नाम और उम्र भेजें, जैसे: रमेश कुमार, 45",
+    askAge: "और मरीज़ की उम्र?",
+    badAge: "कृपया उम्र अंकों में भेजें, जैसे 45।",
+    askGender: "मरीज़ का लिंग?",
+    gender: { M: "पुरुष", F: "महिला", O: "अन्य" },
+    askArea: "कौन-सा इलाका या मोहल्ला? (वैकल्पिक — लिखें, या छोड़ें पर टैप करें)",
     welcomeBack: (n) =>
       `फिर से स्वागत है! पिछली बार बुकिंग "${n}" के नाम से हुई थी। वही नाम रखने के लिए नीचे टैप करें, या किसी और मरीज़ का नाम लिखें।`,
     yesName: (n) => `हाँ, ${n}`,
@@ -222,7 +238,12 @@ export const TEXT: Record<Lang, Text> = {
     noToday: "আজি কোনো এপইণ্টমেণ্ট নাই।",
     todayHead: "আজি:",
     status: { CONFIRMED: "নিশ্চিত", CANCELLED: "বাতিল", COMPLETED: "সম্পূৰ্ণ" },
-    askName: "নিশ্চয়! ৰোগীৰ সম্পূৰ্ণ নাম কি?",
+    askNameAge: "নিশ্চয়! ৰোগীৰ সম্পূৰ্ণ নাম আৰু বয়স পঠিয়াওক, যেনে: ৰমেশ কুমাৰ, 45",
+    askAge: "আৰু ৰোগীৰ বয়স?",
+    badAge: "অনুগ্ৰহ কৰি বয়স সংখ্যাত পঠিয়াওক, যেনে 45।",
+    askGender: "ৰোগীৰ লিংগ?",
+    gender: { M: "পুৰুষ", F: "মহিলা", O: "অন্য" },
+    askArea: "কোন অঞ্চল বা ঠাই? (ইচ্ছাধীন — লিখক, নাইবা এৰক টিপক)",
     welcomeBack: (n) =>
       `পুনৰ স্বাগতম! যোৱাবাৰ বুকিং "${n}"ৰ নামত হৈছিল। সেই নামেই ৰাখিবলৈ তলত টিপক, নাইবা আন ৰোগীৰ নাম লিখক।`,
     yesName: (n) => `হয়, ${n}`,

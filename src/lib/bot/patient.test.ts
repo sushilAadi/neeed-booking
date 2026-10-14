@@ -43,6 +43,17 @@ const run = async (
   return out;
 };
 
+/** Name + age, gender, skip area → the part-of-day question. */
+const details = async (
+  s: ReturnType<typeof createMemoryStore>,
+  now = NOW,
+  doctor = DOC,
+) => {
+  await run(s, text(P, "Raj, 30"), now, doctor);
+  await run(s, reply(P, "g:M"), now, doctor);
+  return run(s, reply(P, "skip"), now, doctor);
+};
+
 test("first hi shows only Book, Normal chat and Change language", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const [m] = await run(s, text(P, "hi"));
@@ -78,7 +89,7 @@ test("Normal chat goes silent; a keyword wakes it", async () => {
   // Normal chat ended the conversation: the keyword asks the language, then books
   expect(ids((await run(s, text(P, "/book")))[0])).toEqual(LANG_IDS);
   expect(bodies(await run(s, reply(P, "lang:en")))).toEqual([
-    "Sure! What's the patient's full name?",
+    "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
   ]);
 });
 
@@ -124,7 +135,9 @@ test("My Appointments with none today", async () => {
 test("sticker mid-flow re-sends the current prompt", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const first = await run(s, reply(P, "book"));
-  expect(bodies(first)).toEqual(["Sure! What's the patient's full name?"]);
+  expect(bodies(first)).toEqual([
+    "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
+  ]);
   expect(await run(s, sticker(P))).toEqual(first);
 });
 
@@ -153,14 +166,16 @@ const toTimes = async (
   const h = (msg: Parameters<typeof handlePatient>[0]["msg"], now = NOW) =>
     run(s, msg, now, doctor);
   await h(reply(P, "book"));
-  await h(text(P, "Raj"));
+  await h(text(P, "Raj, 30"));
+  await h(reply(P, "g:M"));
+  await h(reply(P, "skip"));
   return h(reply(P, `p:${period}`));
 };
 
 test("full booking: name → period → time → skip → confirmed + doctor alert", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "book"));
-  const periods = await run(s, text(P, "Raj"));
+  const periods = await details(s);
   expect(bodies(periods)).toEqual([PERIODS_Q]);
   expect(titles(periods[0])).toEqual([
     "Morning (8)",
@@ -183,7 +198,7 @@ test("full booking: name → period → time → skip → confirmed + doctor ale
   );
   expect(done[1]).toMatchObject({ from: "PLATFORM", to: DOC.personalPhone });
   expect(bodies(done)[1]).toBe(
-    "New appointment booked ✅\n\nPatient: Raj\nPhone: +919111111111\n📅 Thu, Jul 30, 2:30 PM–3:00 PM\nReason: —",
+    "New appointment booked ✅\n\nPatient: Raj\nAge: 30\nGender: Male\nArea: —\nPhone: +919111111111\n📅 Thu, Jul 30, 2:30 PM–3:00 PM\nReason: —",
   );
   expect(s.appointments).toHaveLength(1);
   expect(s.appointments[0]).toMatchObject({
@@ -230,7 +245,13 @@ test("returning patient gets a 'Yes, Raj' button and reply yesname uses it", asy
   const [m] = await run(s, reply(P, "book"));
   expect(ids(m)).toEqual(["yesname"]);
   expect(titles(m)).toEqual(["Yes, Raj Kumar"]);
-  expect(bodies(await run(s, reply(P, "yesname")))).toEqual([PERIODS_Q]);
+  expect(bodies(await run(s, reply(P, "yesname")))).toEqual([
+    "And the patient's age?",
+  ]);
+  // that old visit had no gender saved, so it is asked once
+  expect(bodies(await run(s, text(P, "30")))).toEqual(["Patient's gender?"]);
+  await run(s, reply(P, "g:M"));
+  expect(bodies(await run(s, reply(P, "skip")))).toEqual([PERIODS_Q]);
   await run(s, reply(P, "p:evening"));
   await run(s, reply(P, `t:${at("18:00").toISOString()}`));
   await run(s, reply(P, "skip"));
@@ -243,7 +264,7 @@ test("period buttons hide empty periods and show counts", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await s.addBlock(DOC.id, at("10:00"), at("14:00"));
   await run(s, reply(P, "book"));
-  expect(titles((await run(s, text(P, "Raj")))[0])).toEqual([
+  expect(titles((await details(s))[0])).toEqual([
     "Afternoon (8)",
     "Evening (8)",
     "◀ Back",
@@ -253,7 +274,7 @@ test("period buttons hide empty periods and show counts", async () => {
 test("no slots left today", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "book"));
-  expect(bodies(await run(s, text(P, "Raj"), at("21:45")))).toEqual([
+  expect(bodies(await details(s, at("21:45")))).toEqual([
     "Sorry, no slots are left today.",
   ]);
 });
@@ -432,7 +453,7 @@ test("doctor closes today while a patient is mid-booking → no booking", async 
 test("closed mid-booking: a period tap shows no slots", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "book"));
-  await run(s, text(P, "Raj"));
+  await details(s);
   await s.setClosed(DOC.id, "2026-07-30", true);
   expect(bodies(await run(s, reply(P, "p:afternoon")))).toEqual([
     "Sorry, no slots are left today.",
@@ -461,7 +482,7 @@ test("typed 'back' works too", async () => {
 test("period choice with 3 periods says to type back; with fewer it has a Back button; back → name", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "book"));
-  const three = await run(s, text(P, "Raj"));
+  const three = await details(s);
   expect(bodies(three)[0]).toBe(
     'Which part of today works for you?\n\nType "back" to change the name.',
   );
@@ -471,10 +492,10 @@ test("period choice with 3 periods says to type back; with fewer it has a Back b
   });
   const noEve = { ...DOC, eveningStart: null, eveningEnd: null };
   await run(s2, reply(P, "book"), NOW, noEve);
-  const two = await run(s2, text(P, "Raj"), NOW, noEve);
+  const two = await details(s2, NOW, noEve);
   expect(ids(two[0])).toEqual(["p:morning", "p:afternoon", "back"]);
   expect(bodies(await run(s, text(P, "back")))).toEqual([
-    "Sure! What's the patient's full name?",
+    "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
   ]);
 });
 
@@ -526,7 +547,7 @@ test("a first /book keeps its intent: pick Assamese → straight to the name que
   const s = createMemoryStore({ doctors: [DOC] });
   expect(ids((await raw(s, text(P, "/book")))[0])).toEqual(LANG_IDS);
   expect(bodies(await raw(s, reply(P, "lang:as")))).toEqual([
-    "নিশ্চয়! ৰোগীৰ সম্পূৰ্ণ নাম কি?",
+    "নিশ্চয়! ৰোগীৰ সম্পূৰ্ণ নাম আৰু বয়স পঠিয়াওক, যেনে: ৰমেশ কুমাৰ, 45",
   ]);
 });
 
@@ -545,9 +566,11 @@ test("Hindi booking: questions and options translated, times stay as they are; n
   await run(s, text(P, "hi"));
   await run(s, reply(P, "lang:hi"));
   expect(bodies(await run(s, text(P, "बुक")))).toEqual([
-    "ज़रूर! मरीज़ का पूरा नाम क्या है?",
+    "ज़रूर! मरीज़ का पूरा नाम और उम्र भेजें, जैसे: रमेश कुमार, 45",
   ]);
-  const periods = await run(s, text(P, "राम"));
+  await run(s, text(P, "राम, 60"));
+  await run(s, reply(P, "g:M"));
+  const periods = await run(s, reply(P, "skip"));
   expect(titles(periods[0])).toEqual(["सुबह (8)", "दोपहर (8)", "शाम (8)"]);
   const times = await run(s, reply(P, "p:afternoon"));
   expect(titles(times[0])[0]).toBe("2:00 PM–2:30 PM");
@@ -567,4 +590,108 @@ test("Change language from the menu, mid-conversation", async () => {
   await run(s, text(P, "hi"));
   expect(ids((await run(s, reply(P, "language")))[0])).toEqual(LANG_IDS);
   expect(bodies(await run(s, reply(P, "lang:as")))[0]).toContain("স্বাগতম");
+});
+
+// ---- patient details: name + age, gender, area ----
+test("booking asks name+age together, then gender, then area, then the time", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  expect(bodies(await run(s, reply(P, "book")))).toEqual([
+    "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
+  ]);
+  const g = await run(s, text(P, "Ramesh Kumar, 45"));
+  expect(bodies(g)).toEqual(["Patient's gender?"]);
+  expect(ids(g[0])).toEqual(["g:M", "g:F", "g:O"]);
+  expect(titles(g[0])).toEqual(["Male", "Female", "Other"]);
+  const area = await run(s, reply(P, "g:M"));
+  expect(bodies(area)).toEqual([
+    "Which area or locality? (optional — type it, or tap Skip)",
+  ]);
+  expect(ids(area[0])).toEqual(["skip", "back"]);
+  expect(bodies(await run(s, text(P, "Tezpur")))).toEqual([PERIODS_Q]);
+  await run(s, reply(P, "p:afternoon"));
+  await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  const done = await run(s, reply(P, "skip"));
+  expect(s.appointments[0]).toMatchObject({
+    patientName: "Ramesh Kumar",
+    patientAge: 45,
+    patientGender: "M",
+    patientArea: "Tezpur",
+    source: "whatsapp",
+    createdBy: "Patient (WhatsApp)",
+  });
+  expect(bodies(done)[1]).toBe(
+    "New appointment booked ✅\n\nPatient: Ramesh Kumar\nAge: 45\nGender: Male\nArea: Tezpur\nPhone: +919111111111\n📅 Thu, Jul 30, 2:30 PM–3:00 PM\nReason: —",
+  );
+});
+
+test("a name without an age asks just the age; a non-number asks again", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, reply(P, "book"));
+  expect(bodies(await run(s, text(P, "Ramesh")))).toEqual([
+    "And the patient's age?",
+  ]);
+  expect(bodies(await run(s, text(P, "abc")))).toEqual([
+    "Please send the age as a number, like 45.",
+  ]);
+  expect(bodies(await run(s, text(P, "45")))).toEqual(["Patient's gender?"]);
+});
+
+test("Back steps: area → gender → name; Skip leaves the area empty", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, reply(P, "book"));
+  await run(s, text(P, "Sita, 30"));
+  await run(s, reply(P, "g:F"));
+  expect(bodies(await run(s, reply(P, "back")))).toEqual(["Patient's gender?"]);
+  expect(bodies(await run(s, text(P, "back")))).toEqual([
+    "Sure! Send the patient's full name and age, like: Ramesh Kumar, 45",
+  ]);
+  await run(s, text(P, "Sita, 30"));
+  await run(s, reply(P, "g:F"));
+  expect(bodies(await run(s, reply(P, "skip")))).toEqual([PERIODS_Q]);
+  await run(s, reply(P, "p:afternoon"));
+  await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  await run(s, reply(P, "skip"));
+  expect(s.appointments[0]).toMatchObject({
+    patientGender: "F",
+    patientArea: null,
+    patientAge: 30,
+  });
+});
+
+test("'Yes, name' reuses gender and area, and still asks the age", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await s.createAppointment({
+    doctorId: DOC.id,
+    patientPhone: P,
+    patientName: "Raj",
+    startsAt: atIst("2026-07-29", "14:30"),
+    endsAt: atIst("2026-07-29", "15:00"),
+    notes: null,
+    patientAge: 40,
+    patientGender: "M",
+    patientArea: "Tezpur",
+  });
+  await run(s, reply(P, "book"));
+  expect(bodies(await run(s, reply(P, "yesname")))).toEqual([
+    "And the patient's age?",
+  ]);
+  expect(bodies(await run(s, text(P, "41")))).toEqual([PERIODS_Q]);
+  await run(s, reply(P, "p:afternoon"));
+  await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  await run(s, reply(P, "skip"));
+  expect(s.appointments.at(-1)).toMatchObject({
+    patientName: "Raj",
+    patientAge: 41,
+    patientGender: "M",
+    patientArea: "Tezpur",
+  });
+});
+
+test("Hindi gender buttons", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, text(P, "hi"));
+  await run(s, reply(P, "lang:hi"));
+  await run(s, reply(P, "book"));
+  const g = await run(s, text(P, "राम, 60"));
+  expect(titles(g[0])).toEqual(["पुरुष", "महिला", "अन्य"]);
 });

@@ -12,6 +12,7 @@ test("every language fits WhatsApp's limits", () => {
       t.bookAgain,
       t.menu,
       t.yesName("Ramesh K"),
+      ...Object.values(t.gender),
     ])
       expect(len(b), `${l} button "${b}"`).toBeLessThanOrEqual(20);
     for (const b of [t.menuButton, t.chooseTime, t.selectAppt, t.chooseVisit])

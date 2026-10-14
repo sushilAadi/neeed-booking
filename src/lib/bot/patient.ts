@@ -1,6 +1,7 @@
 import { PATIENT_WA, record } from "../clinic/activity";
 import { bookToday, freeToday } from "../clinic/booking";
-import type { Appointment, Conversation } from "../db/types";
+import { parseNameAge } from "../clinic/patient";
+import type { Appointment, Conversation, Gender } from "../db/types";
 import { rxNo } from "../rx/pdf";
 import { byPeriod, type Period, type Slot } from "../slots";
 import { fmtDay, fmtRange, weekday } from "../time";
@@ -121,15 +122,48 @@ async function dispatch(
       return menu(c, conv);
     case "book_name": {
       if (i === "back") return menu(c, conv);
-      const name =
-        c.msg.type === "text"
-          ? clean(c.msg.text)
-          : i === "yesname"
-            ? (conv.ctx.lastName as string)
-            : "";
+      if (i === "yesname" && conv.ctx.lastName) {
+        // same patient as last time: keep gender and area, ask only the age
+        const w = {
+          name: conv.ctx.lastName,
+          gender: conv.ctx.lastGender ?? null,
+          area: conv.ctx.lastArea ?? null,
+        };
+        await save(c, conv, "book_age", w);
+        return [say(c.t.askAge)];
+      }
+      if (c.msg.type !== "text") return prompt(c, conv);
+      const { name, age } = parseNameAge(clean(c.msg.text));
       if (!name) return prompt(c, conv);
-      return periods(c, conv, { name });
+      if (age === null) {
+        await save(c, conv, "book_age", { name });
+        return [say(c.t.askAge)];
+      }
+      return askGender(c, conv, { name, age });
     }
+    case "book_age": {
+      if (i === "back") return startBook(c, conv);
+      const t = c.msg.type === "text" ? clean(c.msg.text) : "";
+      const age = /^\d{1,3}$/.test(t) ? Number(t) : Number.NaN;
+      if (!(age >= 0 && age <= 120)) return [say(c.t.badAge)];
+      const w = { ...who(conv.ctx), age };
+      return w.gender ? periods(c, conv, w) : askGender(c, conv, w);
+    }
+    case "book_gender":
+      if (i === "back") return startBook(c, conv);
+      if (i === "g:M" || i === "g:F" || i === "g:O")
+        return askArea(c, conv, { ...who(conv.ctx), gender: i.slice(2) });
+      return prompt(c, conv);
+    case "book_area":
+      if (i === "back") return askGender(c, conv, who(conv.ctx));
+      if (i === "skip")
+        return periods(c, conv, { ...who(conv.ctx), area: null });
+      if (c.msg.type === "text" && clean(c.msg.text))
+        return periods(c, conv, {
+          ...who(conv.ctx),
+          area: clean(c.msg.text).slice(0, 80),
+        });
+      return prompt(c, conv);
     case "book_period":
       if (i === "back") return startBook(c, conv);
       if (i?.startsWith("p:")) return times(c, conv, i.slice(2) as Period, 0);
@@ -179,6 +213,12 @@ async function prompt(c: PC, conv: Conversation): Promise<Reply[]> {
   switch (conv.state) {
     case "book_name":
       return [namePrompt(c, conv.ctx.lastName as string | undefined)];
+    case "book_age":
+      return [say(c.t.askAge)];
+    case "book_gender":
+      return [genderPrompt(c)];
+    case "book_area":
+      return [areaPrompt(c)];
     case "book_period":
       return periods(c, conv, conv.ctx);
     case "book_time":
@@ -236,8 +276,48 @@ async function mine(c: PC, conv: Conversation): Promise<Reply[]> {
   ];
 }
 
+/** The patient details carried through the booking steps. */
+const who = (ctx: Record<string, unknown>) => ({
+  name: ctx.name as string,
+  age: (ctx.age as number | undefined) ?? null,
+  gender: (ctx.gender as Gender | undefined) ?? null,
+  area: (ctx.area as string | undefined) ?? null,
+});
+
+const genderPrompt = (c: PC): Out => ({
+  kind: "buttons",
+  body: c.t.askGender,
+  buttons: (["M", "F", "O"] as const).map((g) => ({
+    id: `g:${g}`,
+    title: c.t.gender[g],
+  })),
+});
+const areaPrompt = (c: PC): Out => ({
+  kind: "buttons",
+  body: c.t.askArea,
+  buttons: skipBack(c),
+});
+
+async function askGender(
+  c: PC,
+  conv: Conversation,
+  w: Record<string, unknown>,
+): Promise<Reply[]> {
+  await save(c, conv, "book_gender", w);
+  return [genderPrompt(c)];
+}
+
+async function askArea(
+  c: PC,
+  conv: Conversation,
+  w: Record<string, unknown>,
+): Promise<Reply[]> {
+  await save(c, conv, "book_area", w);
+  return [areaPrompt(c)];
+}
+
 function namePrompt(c: PC, lastName?: string): Out {
-  if (!lastName) return say(c.t.askName);
+  if (!lastName) return say(c.t.askNameAge);
   return {
     kind: "buttons",
     body: c.t.welcomeBack(lastName),
@@ -254,9 +334,20 @@ async function startBook(c: PC, conv: Conversation): Promise<Reply[]> {
     await save(c, conv, "idle");
     return [say(c.t.notTaking(c.doctor.name))];
   }
-  const past = await c.store.patientAppointments(c.doctor.id, c.msg.from);
-  const lastName = past[0]?.patientName;
-  await save(c, conv, "book_name", lastName ? { lastName } : {});
+  const [last] = await c.store.patientAppointments(c.doctor.id, c.msg.from);
+  const lastName = last?.patientName;
+  await save(
+    c,
+    conv,
+    "book_name",
+    last
+      ? {
+          lastName,
+          lastGender: last.patientGender,
+          lastArea: last.patientArea,
+        }
+      : {},
+  );
   return [namePrompt(c, lastName)];
 }
 
@@ -279,7 +370,7 @@ async function periods(
     await save(c, conv, "idle");
     return [say(c.t.noSlots)];
   }
-  await save(c, conv, "book_period", { name: ctx.name });
+  await save(c, conv, "book_period", who(ctx));
   // WhatsApp allows 3 buttons; with all three periods shown, Back is typed instead.
   if (buttons.length < 3) buttons.push(back(c));
   const body =
@@ -308,7 +399,7 @@ async function times(
   if (more) rows.push({ id: "more", title: c.t.laterTimes });
   rows.push(back(c));
   await save(c, conv, "book_time", {
-    name: conv.ctx.name,
+    ...who(conv.ctx),
     period,
     page,
   });
@@ -341,7 +432,7 @@ async function pickTime(
     ];
   }
   await save(c, conv, "book_reason", {
-    name: conv.ctx.name,
+    ...who(conv.ctx),
     period: conv.ctx.period,
     page: conv.ctx.page,
     startsAt: start.toISOString(),
@@ -361,13 +452,17 @@ async function create(
   conv: Conversation,
   notes: string | null,
 ): Promise<Reply[]> {
-  const name = conv.ctx.name as string;
+  const w = who(conv.ctx);
+  const name = w.name;
   const r = await bookToday(
     c.store,
     c.doctor,
     {
       phone: c.msg.from,
       name,
+      age: w.age,
+      gender: w.gender,
+      area: w.area,
       reason: notes,
       startsAt: new Date(conv.ctx.startsAt as string),
       source: "whatsapp",
@@ -384,7 +479,7 @@ async function create(
       from: platformId(),
       to: c.doctor.personalPhone,
       msg: say(
-        `New appointment booked ✅\n\nPatient: ${name}\nPhone: +${c.msg.from}\n📅 ${when(res)}\nReason: ${notes ?? "—"}`,
+        `New appointment booked ✅\n\nPatient: ${name}\nAge: ${w.age ?? "—"}\nGender: ${w.gender ? TEXT.en.gender[w.gender] : "—"}\nArea: ${w.area ?? "—"}\nPhone: +${c.msg.from}\n📅 ${when(res)}\nReason: ${notes ?? "—"}`,
       ),
     },
   ];

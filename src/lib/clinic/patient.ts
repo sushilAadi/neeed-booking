@@ -29,3 +29,21 @@ export async function lastPatientDetails(
     area: last.patientArea,
   };
 }
+
+/** "Ramesh Kumar, 45" or "45 Ramesh Kumar" → name + age (0–120); no age → null. */
+export function parseNameAge(text: string): {
+  name: string;
+  age: number | null;
+} {
+  const t = text.trim().replace(/\s+/g, " ");
+  const after = /^(.*?)[\s,.\-–]*(\d{1,3})$/.exec(t); // "Ramesh Kumar, 45"
+  const before = /^(\d{1,3})[\s,.\-–]+(\D.*)$/.exec(t); // "45 Ramesh Kumar"
+  const [name, num] = after
+    ? [after[1], after[2]]
+    : before
+      ? [before[2], before[1]]
+      : [t, ""];
+  const age = num ? Number(num) : Number.NaN;
+  if (!(age >= 0 && age <= 120)) return { name: t, age: null };
+  return { name: name.replace(/[\s,.\-–]+$/, "").trim(), age };
+}
