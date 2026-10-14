@@ -231,12 +231,14 @@ export function TodayView(p: {
       </Sheet>
 
       <CancelSheet
+        key={pending?.kind === "cancel" ? pending.card.id : "cancel"}
         pending={pending}
         busy={busy}
         onClose={() => setPending(null)}
         onConfirm={(id, reason) => run(() => cancelAction(id, reason))}
       />
       <FeeSheet
+        key={pending?.kind === "fee" ? pending.card.id : "fee"}
         pending={pending}
         busy={busy}
         onClose={() => setPending(null)}
@@ -342,7 +344,8 @@ function PatientCard(p: { c: Card; onCancel: () => void; onFee: () => void }) {
               className="btn btn-ghost btn-sm"
               aria-label={`Cancel ${c.name}'s visit`}
             >
-              <Ban size={18} aria-hidden /> Cancel
+              <Ban size={18} aria-hidden />
+              <span className="hidden sm:inline">Cancel</span>
             </button>
           </div>
         )}
@@ -433,7 +436,7 @@ function FeeSheet(p: {
   onSave: (id: string, fee: number) => void;
 }) {
   const card = p.pending?.kind === "fee" ? p.pending.card : null;
-  const [fee, setFee] = useState("");
+  const [fee, setFee] = useState(card?.fee == null ? "" : String(card.fee));
   return (
     <Sheet
       open={!!card}
