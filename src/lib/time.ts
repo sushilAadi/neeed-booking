@@ -28,7 +28,10 @@ export function fmtDay(d: Date): string {
 
 export function fmtTime(d: Date): string {
   // some ICU builds put U+202F before AM/PM
-  return part(d, { hour: "numeric", minute: "2-digit", hour12: true }).replace(/\u202f/g, " ");
+  return part(d, { hour: "numeric", minute: "2-digit", hour12: true }).replace(
+    /\u202f/g,
+    " ",
+  );
 }
 
 export function fmtRange(start: Date, end: Date): string {
