@@ -2,6 +2,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Appointment, Block, Doctor, Store } from "./types";
 
+// biome-ignore lint/suspicious/noExplicitAny: untyped Supabase rows, mapped field by field below
 type Row = Record<string, any>;
 
 const toDoctor = (r: Row): Doctor => ({
@@ -246,8 +247,11 @@ export function createSupabaseStore(): Store {
       return new Uint8Array(await (blob as Blob).arrayBuffer());
     },
     async signedUrl(bucket, path) {
-      return must(await db.storage.from(bucket).createSignedUrl(path, 3600))!
-        .signedUrl;
+      const data = must(
+        await db.storage.from(bucket).createSignedUrl(path, 3600),
+      );
+      if (!data) throw new Error(`no signed url for ${bucket}/${path}`);
+      return data.signedUrl;
     },
   };
 }

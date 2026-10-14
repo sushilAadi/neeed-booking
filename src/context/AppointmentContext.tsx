@@ -560,9 +560,6 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    const doctorObj = doctors.find((d) => d.name === details.doctorName);
-    const doctorPhone = doctorObj?.phoneNumber;
-
     const newApt: Appointment = {
       ...details,
       id: `apt-${Math.random().toString(36).substring(2, 9)}`,
@@ -575,25 +572,6 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({
       `Successfully requested appointment for ${details.patientName}!`,
       "success",
     );
-
-    // Asynchronously dispatch WhatsApp notifications via local proxy route
-    fetch("/api/send-whatsapp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        patientPhone: details.patientPhone,
-        doctorPhone: doctorPhone,
-        patientName: details.patientName,
-        doctorName: details.doctorName,
-        date: details.date,
-        time: details.time,
-        type: details.type,
-      }),
-    }).catch((err) => {
-      console.error("Failed to trigger WhatsApp proxy route:", err);
-    });
   };
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {

@@ -48,15 +48,22 @@ export const sticker = (from: string, id?: string, pn?: string): Incoming => ({
   type: "other",
 });
 
+const items = (s: Send): { id: string; title: string }[] =>
+  s.msg.kind === "list"
+    ? s.msg.rows
+    : s.msg.kind === "buttons"
+      ? s.msg.buttons
+      : [];
+export const ids = (s: Send): string[] => items(s).map((r) => r.id);
+export const titles = (s: Send): string[] => items(s).map((r) => r.title);
 export const bodies = (sends: Send[]): string[] =>
   sends.map((s) => (s.msg.kind === "document" ? s.msg.caption : s.msg.body));
-// biome-ignore lint/suspicious/noExplicitAny: test helper over the Out union
-export const ids = (s: Send): string[] =>
-  ((s.msg as any).rows ?? (s.msg as any).buttons ?? []).map(
-    (r: { id: string }) => r.id,
-  );
-// biome-ignore lint/suspicious/noExplicitAny: test helper over the Out union
-export const titles = (s: Send): string[] =>
-  ((s.msg as any).rows ?? (s.msg as any).buttons ?? []).map(
-    (r: { title: string }) => r.title,
-  );
+
+const b64 = (s: string) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+/** Tiny images for media stubs and signatures. */
+export const PNG_1PX = b64(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+);
+export const JPG_1PX = b64(
+  "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYzLjEuMTAyAP/bAEMACAQEBAQEBQUFBQUFBgYGBgYGBgYGBgYGBgcHBwgICAcHBwYGBwcICAgICQkJCAgICAkJCgoKDAwLCw4ODhERFP/EAEsAAQEAAAAAAAAAAAAAAAAAAAAHAQEAAAAAAAAAAAAAAAAAAAAAEAEAAAAAAAAAAAAAAAAAAAAAEQEAAAAAAAAAAAAAAAAAAAAA/8AAEQgACAAIAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8Av4AP/9k=",
+);

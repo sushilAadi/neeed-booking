@@ -1,4 +1,5 @@
 import type { Appointment, Conversation } from "../db/types";
+import { renderPrescription, rxNo } from "../rx/pdf";
 import { parseRange, periodRange } from "../slots";
 import { addDays, atIst, fmtDay, fmtRange } from "../time";
 import { windowOpen } from "../wa/deliver";
@@ -48,6 +49,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   }
   if (i === "cancel" || i === "dcancel") return dcancelList(c, conv);
   if (i === "block") return blockDates(c, conv);
+  if (i?.startsWith("done:")) return markStart(c, conv, i.slice(5));
 
   switch (conv.state) {
     case "close_confirm":
@@ -60,6 +62,16 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       if (i === "skip") return dcancelDone(c, conv, null);
       if (c.msg.type === "text" && clean(c.msg.text))
         return dcancelDone(c, conv, clean(c.msg.text));
+      return prompt(c, conv);
+    case "rx_input":
+      if (i === "skip") return markDone(c, conv, null);
+      if (c.msg.type === "text" && c.msg.text?.trim())
+        return markDone(c, conv, { text: c.msg.text.trim() });
+      if (c.msg.type === "image" && c.msg.mediaId)
+        return markDone(c, conv, {
+          mediaId: c.msg.mediaId,
+          caption: c.msg.caption?.trim(),
+        });
       return prompt(c, conv);
     case "block_date":
       if (i?.startsWith("d:")) return blockRanges(c, conv, i.slice(2));
@@ -466,5 +478,117 @@ async function blockApply(
       `Blocked ${day} — ${b.whole ? "whole day" : fmtRange(b.start, b.end)}.`,
     ),
     ...notices,
+  ];
+}
+
+const RX_PROMPT = skipPrompt(
+  "Marking that visit complete. Type the prescription/notes, send a photo of it (caption optional), or tap Skip to finish with no prescription attached.",
+);
+
+async function ownConfirmed(
+  c: BotCtx,
+  id: string,
+): Promise<Appointment | null> {
+  const a = await c.store.getAppointment(id);
+  return a && a.doctorId === c.doctor.id && a.status === "CONFIRMED" ? a : null;
+}
+
+async function markStart(
+  c: BotCtx,
+  conv: Conversation,
+  id: string,
+): Promise<Reply[]> {
+  if (!(await ownConfirmed(c, id))) return todayList(c, conv);
+  await saveState(c.store, conv, "rx_input", { appointmentId: id });
+  return [RX_PROMPT];
+}
+
+async function markDone(
+  c: BotCtx,
+  conv: Conversation,
+  rx: { text: string } | { mediaId: string; caption?: string } | null,
+): Promise<Reply[]> {
+  const a = await ownConfirmed(c, conv.ctx.appointmentId as string);
+  if (!a) return todayList(c, conv);
+  await saveState(c.store, conv, "idle");
+  if (!rx) {
+    await c.store.updateAppointment(a.id, { status: "COMPLETED" });
+    return [say("Marked complete.")];
+  }
+
+  const visit = `${fmtDay(a.startsAt)}, ${fmtRange(a.startsAt, a.endsAt)}`;
+  let prescriptionText: string | null = null;
+  let prescriptionImagePath: string | null = null;
+  let photo: { bytes: Uint8Array; mime: string } | undefined;
+  if ("text" in rx) prescriptionText = rx.text;
+  else {
+    if (!c.media) throw new Error("media downloader missing");
+    photo = await c.media(rx.mediaId);
+    const png = photo.mime === "image/png";
+    prescriptionImagePath = `${a.id}.${png ? "png" : "jpg"}`;
+    await c.store.putFile(
+      "prescriptions",
+      prescriptionImagePath,
+      photo.bytes,
+      png ? "image/png" : "image/jpeg",
+    );
+    prescriptionText = rx.caption || null;
+  }
+
+  const sigPath = c.doctor.signaturePath as string;
+  const pdf = await renderPrescription({
+    clinic: c.doctor.clinicName,
+    doctorName: c.doctor.name,
+    regNo: c.doctor.registrationNumber ?? "",
+    rxNo: rxNo(a.id),
+    patientName: a.patientName,
+    patientPhone: a.patientPhone,
+    visit,
+    lines: (prescriptionText ?? "").split("\n").filter((l) => l.trim()),
+    photo,
+    signature: {
+      bytes: await c.store.getFile("signatures", sigPath),
+      mime: sigPath.endsWith(".png") ? "image/png" : "image/jpeg",
+    },
+  });
+  const prescriptionPdfPath = `${a.id}.pdf`;
+  await c.store.putFile(
+    "prescriptions",
+    prescriptionPdfPath,
+    pdf,
+    "application/pdf",
+  );
+  await c.store.updateAppointment(a.id, {
+    status: "COMPLETED",
+    prescriptionText,
+    prescriptionImagePath,
+    prescriptionPdfPath,
+  });
+
+  if (
+    !(await windowOpen(
+      c.store,
+      c.doctor.businessPhoneNumberId,
+      a.patientPhone,
+      c.now,
+    ))
+  )
+    return [
+      say(
+        "Saved. The patient's 24-hour window has closed, so they'll get it from \"My Prescriptions\" next time they message.",
+      ),
+    ];
+  return [
+    {
+      from: c.doctor.businessPhoneNumberId,
+      to: a.patientPhone,
+      msg: {
+        kind: "document",
+        link: await c.store.signedUrl("prescriptions", prescriptionPdfPath),
+        filename: `Prescription-${rxNo(a.id)}.pdf`,
+        caption: `Prescription from your visit on ${visit} with ${c.doctor.name}.`,
+      },
+    },
+    say("Saved and sent to the patient."),
   ];
 }

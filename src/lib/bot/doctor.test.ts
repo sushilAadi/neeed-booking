@@ -4,13 +4,24 @@ import type { Doctor } from "../db/types";
 import { atIst } from "../time";
 import type { Incoming } from "../wa/types";
 import { handleDoctor } from "./doctor";
-import { bodies, DOC, ids, image, NOW, reply, text, titles } from "./test-kit";
+import {
+  bodies,
+  DOC,
+  ids,
+  image,
+  JPG_1PX,
+  NOW,
+  PNG_1PX,
+  reply,
+  text,
+  titles,
+} from "./test-kit";
 
 const D = DOC.personalPhone;
 const PL = "PLATFORM";
 const at = (hm: string) => atIst("2026-07-30", hm);
 const jpeg = async () => ({
-  bytes: new Uint8Array([0xff, 0xd8, 0xff]),
+  bytes: JPG_1PX,
   mime: "image/jpeg",
 });
 const run = (s: MemoryStore, msg: Incoming, doctor: Doctor = DOC, now = NOW) =>
@@ -293,4 +304,94 @@ test("block clashing with today's booking → warning; cn cancels + notifies; ke
   expect(
     await s2.blocksBetween(DOC.id, at("00:00"), atIst("2026-07-31", "00:00")),
   ).toHaveLength(1);
+});
+
+// ---- Task 9: mark complete ----
+const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
+  const a = await book(s, "919111", "14:30", "15:00");
+  if (patientWindowOpen) await s.touchInbound("DOCPN", "919111", NOW);
+  const prompt = await run(s, r(`done:${a.id}`));
+  expect(bodies(prompt)).toEqual([
+    "Marking that visit complete. Type the prescription/notes, send a photo of it (caption optional), or tap Skip to finish with no prescription attached.",
+  ]);
+  return a;
+};
+const sigStore = async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await s.putFile(
+    "signatures",
+    DOC.signaturePath as string,
+    PNG_1PX,
+    "image/png",
+  );
+  return s;
+};
+
+test("mark complete with text → COMPLETED, PDF stored, document sent, 'Saved and sent to the patient.'", async () => {
+  const s = await sigStore();
+  const a = await complete(s, true);
+  const out = await run(s, t("Paracetamol 500mg\nRest 2 days"));
+  const doc = out.find((x) => x.msg.kind === "document");
+  expect(doc).toMatchObject({ from: "DOCPN", to: "919111" });
+  expect(doc?.msg).toMatchObject({
+    link: `mem://prescriptions/${a.id}.pdf`,
+    filename: `Prescription-RX-${a.id.slice(0, 8).toUpperCase()}.pdf`,
+    caption:
+      "Prescription from your visit on Thu, Jul 30, 2:30 PM–3:00 PM with Dr. Mehta.",
+  });
+  expect(bodies(out.filter((x) => x.to === D))).toEqual([
+    "Saved and sent to the patient.",
+  ]);
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    prescriptionText: "Paracetamol 500mg\nRest 2 days",
+    prescriptionPdfPath: `${a.id}.pdf`,
+  });
+  expect(
+    new TextDecoder().decode(
+      s.files.get(`prescriptions/${a.id}.pdf`)?.slice(0, 5),
+    ),
+  ).toBe("%PDF-");
+});
+
+test("mark complete with a photo stores the image and the PDF", async () => {
+  const s = await sigStore();
+  const a = await complete(s, true);
+  await run(s, image(D, "RXPHOTO", "after food", undefined, PL));
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    prescriptionText: "after food",
+    prescriptionImagePath: `${a.id}.jpg`,
+  });
+  expect(s.files.has(`prescriptions/${a.id}.jpg`)).toBe(true);
+});
+
+test("mark complete when the patient's window is closed → stored, no document, the window-closed copy", async () => {
+  const s = await sigStore();
+  await complete(s, false);
+  const out = await run(s, t("Paracetamol"));
+  expect(out.some((x) => x.msg.kind === "document")).toBe(false);
+  expect(bodies(out)).toEqual([
+    "Saved. The patient's 24-hour window has closed, so they'll get it from \"My Prescriptions\" next time they message.",
+  ]);
+  expect(s.appointments[0].status).toBe("COMPLETED");
+});
+
+test("mark complete with skip → COMPLETED, no PDF, 'Marked complete.'", async () => {
+  const s = await sigStore();
+  await complete(s, true);
+  expect(bodies(await run(s, r("skip")))).toEqual(["Marked complete."]);
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    prescriptionPdfPath: null,
+  });
+});
+
+test("done: id of a cancelled or foreign appointment is ignored", async () => {
+  const s = await sigStore();
+  const a = await book(s, "919111", "14:30", "15:00");
+  await s.updateAppointment(a.id, { status: "CANCELLED" });
+  const out = await run(s, r(`done:${a.id}`));
+  expect(out[0].msg.kind).not.toBe("buttons");
+  expect(s.appointments[0].status).toBe("CANCELLED");
 });
