@@ -240,7 +240,7 @@ async function close(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       ),
     ];
   }
-  await saveState(c.store, conv, "close_confirm");
+  await saveState(c.store, conv, "close_confirm", { date: today(c.now).date });
   return [clashWarning(appts.length)];
 }
 
@@ -249,6 +249,8 @@ async function closeConfirm(
   conv: Conversation,
   choice: "cn" | "keep",
 ): Promise<Reply[]> {
+  // a warning shown on an earlier day: ask again about today's bookings
+  if (conv.ctx.date !== today(c.now).date) return close(c, conv);
   await c.store.setClosed(c.doctor.id, today(c.now).date, true);
   await saveState(c.store, conv, "idle");
   if (choice === "keep")
@@ -510,9 +512,9 @@ async function markDone(
 ): Promise<Reply[]> {
   const a = await ownConfirmed(c, conv.ctx.appointmentId as string);
   if (!a) return todayList(c, conv);
-  await saveState(c.store, conv, "idle");
   if (!rx) {
     await c.store.updateAppointment(a.id, { status: "COMPLETED" });
+    await saveState(c.store, conv, "idle");
     return [say("Marked complete.")];
   }
 
@@ -564,6 +566,8 @@ async function markDone(
     prescriptionImagePath,
     prescriptionPdfPath,
   });
+  // only now: if anything above throws, the doctor stays in rx_input and can resend
+  await saveState(c.store, conv, "idle");
 
   if (
     !(await windowOpen(

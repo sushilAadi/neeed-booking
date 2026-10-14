@@ -404,3 +404,23 @@ test("rx id of another patient sends nothing but the menu", async () => {
   expect(r[0].msg.kind).toBe("list");
   expect(ids(r[0])).not.toContain(`rx:${a.id}`);
 });
+
+// ---- review fixes ----
+test("doctor closes today while a patient is mid-booking → no booking", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await toTimes(s);
+  await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  await s.setClosed(DOC.id, "2026-07-30", true);
+  const r = await run(s, reply(P, "skip"));
+  expect(s.appointments).toHaveLength(0);
+  expect(bodies(r)).not.toContain(expect.stringContaining("You're confirmed"));
+});
+test("closed mid-booking: a period tap shows no slots", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, reply(P, "book"));
+  await run(s, text(P, "Raj"));
+  await s.setClosed(DOC.id, "2026-07-30", true);
+  expect(bodies(await run(s, reply(P, "p:afternoon")))).toEqual([
+    "Sorry, no slots are left today.",
+  ]);
+});

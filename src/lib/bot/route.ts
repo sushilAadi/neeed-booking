@@ -52,5 +52,11 @@ export async function routeIncoming(
     );
   } catch (e) {
     console.error("routeIncoming failed", msg.id, e);
+    // The sender's window is open (they just wrote), so this is free; Meta won't redeliver after our 200.
+    await send({
+      from: msg.phoneNumberId,
+      to: msg.from,
+      msg: say("Sorry, something went wrong — please try again."),
+    }).catch(() => {});
   }
 }

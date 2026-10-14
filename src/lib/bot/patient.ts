@@ -184,6 +184,7 @@ async function startBook(c: BotCtx, conv: Conversation): Promise<Reply[]> {
 
 async function todaysFree(c: BotCtx): Promise<Slot[]> {
   const t = today(c.now);
+  if (await c.store.isClosed(c.doctor.id, t.date)) return [];
   const appts = await c.store.appointmentsBetween(c.doctor.id, t.from, t.to);
   const blocks = await c.store.blocksBetween(c.doctor.id, t.from, t.to);
   const busy = [

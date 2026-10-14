@@ -89,3 +89,15 @@ test("a handler error is caught and logged", async () => {
     routeIncoming(s, text("911", "hi", "m6"), NOW, async () => {}, noMedia),
   ).resolves.toBeUndefined();
 });
+test("a handler error tells the sender to try again", async () => {
+  const { sent, send } = collect();
+  const s = createMemoryStore({ doctors: [DOC] });
+  s.patientAppointments = async () => {
+    throw new Error("db down");
+  };
+  await routeIncoming(s, text("911", "hi", "m7"), NOW, send, noMedia);
+  expect(bodies(sent)).toEqual([
+    "Sorry, something went wrong — please try again.",
+  ]);
+  expect(sent[0]).toMatchObject({ from: "DOCPN", to: "911" });
+});

@@ -6,7 +6,7 @@ export function verifySignature(
   header: string | null,
   appSecret: string,
 ): boolean {
-  if (!header?.startsWith("sha256=")) return false;
+  if (!appSecret || !header?.startsWith("sha256=")) return false;
   const want = Buffer.from(
     createHmac("sha256", appSecret).update(rawBody).digest("hex"),
   );

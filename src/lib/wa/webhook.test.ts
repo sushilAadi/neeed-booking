@@ -99,3 +99,7 @@ test("button reply is a reply", () => {
   };
   expect(parseWebhook(b)[0]).toMatchObject({ type: "reply", replyId: "skip" });
 });
+test("verifySignature rejects everything when the app secret is empty", () => {
+  const sig = `sha256=${createHmac("sha256", "").update("{}").digest("hex")}`;
+  expect(verifySignature("{}", sig, "")).toBe(false);
+});

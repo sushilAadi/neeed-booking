@@ -395,3 +395,46 @@ test("done: id of a cancelled or foreign appointment is ignored", async () => {
   expect(out[0].msg.kind).not.toBe("buttons");
   expect(s.appointments[0].status).toBe("CANCELLED");
 });
+
+// ---- review fixes ----
+test("a failed photo download keeps the visit open so the doctor can resend", async () => {
+  const s = await sigStore();
+  const a = await book(s, "919111", "14:30", "15:00");
+  await run(s, r(`done:${a.id}`));
+  const broken = async () => {
+    throw new Error("media 500");
+  };
+  await expect(
+    handleDoctor({
+      store: s,
+      doctor: DOC,
+      msg: image(D, "X", undefined, undefined, PL),
+      now: NOW,
+      media: broken,
+    }),
+  ).rejects.toThrow();
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+  expect((await s.getConversation(PL, D)).state).toBe("rx_input");
+});
+test("a 'Cancel & notify' tap left over from yesterday re-prompts instead of cancelling today's patients", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await book(s, "919111", "14:30", "15:00");
+  await run(s, r("close"));
+  const tomorrow = new Date(+NOW + 24 * 3600_000);
+  await s.createAppointment({
+    doctorId: DOC.id,
+    patientPhone: "919222",
+    patientName: "Sita",
+    startsAt: atIst("2026-07-31", "14:30"),
+    endsAt: atIst("2026-07-31", "15:00"),
+    notes: null,
+  });
+  const out = await run(s, r("cn"), DOC, tomorrow);
+  expect(bodies(out)).toEqual([
+    "You have 1 confirmed appointment(s) today. What should happen to them?",
+  ]);
+  expect(s.appointments.find((x) => x.patientPhone === "919222")?.status).toBe(
+    "CONFIRMED",
+  );
+  expect(await s.isClosed(DOC.id, "2026-07-31")).toBe(false);
+});
