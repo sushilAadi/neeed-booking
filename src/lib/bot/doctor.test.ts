@@ -603,3 +603,45 @@ test("blocking a period that is Off says so", async () => {
     "Your morning hours are Off, so there's nothing to block.",
   ]);
 });
+
+test("a lunch break that runs into a period is rejected", async () => {
+  const s = createMemoryStore({ doctors: [{ ...DOC, morningEnd: "12:30" }] });
+  await run(s, r("hours"));
+  await run(s, r("h:lunch"));
+  const out = await run(s, t("12:30pm-3pm"));
+  expect(bodies(out)[0]).toBe(
+    "That lunch break (12:30 PM–3:00 PM) runs into your afternoon hours (2:00 PM–6:00 PM). Put it inside one period or between periods.",
+  );
+  expect(bodies(out)[1]).toContain("Lunch break? Now: None.");
+  expect((await s.doctorByPersonalPhone(D))?.lunchStart).toBeNull();
+});
+
+test("a lunch break inside a period or between periods is fine", async () => {
+  const s = createMemoryStore({ doctors: [{ ...DOC, morningEnd: "12:30" }] });
+  await run(s, r("h:lunch"));
+  await run(s, t("12:30pm-2pm"));
+  expect((await s.doctorByPersonalPhone(D))?.lunchStart).toBe("12:30");
+  await run(s, r("h:lunch"));
+  await run(s, t("3pm-4pm"));
+  expect((await s.doctorByPersonalPhone(D))?.lunchStart).toBe("15:00");
+});
+
+test("changing a period so the lunch break crosses it is rejected", async () => {
+  const s = createMemoryStore({
+    doctors: [
+      {
+        ...DOC,
+        morningEnd: "12:30",
+        afternoonStart: "14:00",
+        lunchStart: "12:30",
+        lunchEnd: "14:00",
+      },
+    ],
+  });
+  await run(s, r("h:afternoon"));
+  const out = await run(s, t("1pm-6pm"));
+  expect(bodies(out)[0]).toBe(
+    "Your lunch break (12:30 PM–2:00 PM) would run into these hours. Change the lunch break first, or type different hours.",
+  );
+  expect((await s.doctorByPersonalPhone(D))?.afternoonStart).toBe("14:00");
+});

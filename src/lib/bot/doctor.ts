@@ -6,6 +6,7 @@ import type {
 } from "../db/types";
 import { renderPrescription, rxNo } from "../rx/pdf";
 import {
+  crosses,
   lunchHours,
   overlapsAny,
   PERIODS,
@@ -741,6 +742,22 @@ async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       return again(
         `Couldn't read that. Type it like "${k === "lunch" ? "1pm-2pm" : "9am-1pm"}", or tap a button.`,
       );
+    if (k === "lunch") {
+      const hit = PERIODS.find((p) => {
+        const ph = periodHours(c.doctor, p);
+        return ph && crosses(range, ph);
+      });
+      if (hit)
+        return again(
+          `That lunch break (${rangeText(range)}) runs into your ${hit} hours (${rangeText(periodHours(c.doctor, hit))}). Put it inside one period or between periods.`,
+        );
+    } else {
+      const lunch = lunchHours(c.doctor);
+      if (lunch && crosses(lunch, range))
+        return again(
+          `Your lunch break (${rangeText(lunch)}) would run into these hours. Change the lunch break first, or type different hours.`,
+        );
+    }
     if (k !== "lunch") {
       const clash = PERIODS.filter((p) => p !== k).find((p) => {
         const other = periodHours(c.doctor, p);

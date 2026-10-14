@@ -38,6 +38,11 @@ export function lunchHours(h: Hours): Range | null {
 export const overlapsAny = (r: Range, others: Range[]) =>
   others.some((o) => r.start < o.end && o.start < r.end);
 
+/** True when `inner` overlaps `outer` without sitting fully inside it (crosses its start or end). */
+export const crosses = (inner: Range, outer: Range) =>
+  overlapsAny(inner, [outer]) &&
+  !(outer.start <= inner.start && inner.end <= outer.end);
+
 function slotsOf(h: Hours, date: string, p: Period): Slot[] {
   const r = periodHours(h, p);
   if (!r) return [];
