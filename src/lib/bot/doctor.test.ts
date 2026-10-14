@@ -333,7 +333,7 @@ const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
   if (patientWindowOpen) await s.touchInbound("DOCPN", "919111", NOW);
   const prompt = await run(s, r(`done:${a.id}`));
   expect(bodies(prompt)).toEqual([
-    "Marking that visit complete. Type the prescription/notes, send a photo of it (caption optional), or tap Skip to finish with no prescription attached.",
+    "Marking that visit complete. Send the prescription in one message, one medicine per line:\n\nAugmentin 625 1-0-1 after food 3 days\nPan D 40mg 1-0-1 BF 5 days\nMontair LC 0-0-1 AF 5d\nDolo 650 SOS\nAdvice: Drink plenty of water\n\n• 1-0-1 = morning-afternoon-night (2-0-2 = 2 tablets each time; OD, BD, TDS, HS also work)\n• AF / BF = after / before food\n• 3d, 1 week, 2 months = how long\n• Advice: goes in the advice box\n\nOr send a photo of the prescription (caption optional), or tap Skip to finish without one.",
   ]);
   return a;
 };
