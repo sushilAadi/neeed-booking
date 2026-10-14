@@ -34,8 +34,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${body.variable} ${heading.variable} h-full antialiased`}
+      // Browser extensions (ColorZilla, security add-ons…) add attributes here before React loads.
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      <body
+        className="flex min-h-full flex-col font-sans"
+        suppressHydrationWarning
+      >
+        {children}
+      </body>
     </html>
   );
 }
