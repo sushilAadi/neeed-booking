@@ -16,7 +16,7 @@ import {
   periodRange,
   type Range,
 } from "../slots";
-import { addDays, atIst, fmtDay, fmtRange, fmtTime } from "../time";
+import { addDays, atIst, fmtDate, fmtDay, fmtRange, fmtTime } from "../time";
 import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
 import {
@@ -615,8 +615,14 @@ async function markDone(
     rxNo: rxNo(a.id),
     patientName: a.patientName,
     patientPhone: a.patientPhone,
-    visit,
-    lines: (prescriptionText ?? "").split("\n").filter((l) => l.trim()),
+    date: fmtDate(a.startsAt),
+    time: fmtRange(a.startsAt, a.endsAt),
+    // A photo's caption is advice; typed text is parsed into medicines.
+    text: photo
+      ? prescriptionText
+        ? `Advice: ${prescriptionText}`
+        : ""
+      : (prescriptionText ?? ""),
     photo,
     signature: {
       bytes: await c.store.getFile("signatures", sigPath),

@@ -2,7 +2,9 @@ import { expect, test } from "vitest";
 import {
   addDays,
   atIst,
+  fmtDate,
   fmtDay,
+  fmtPhone,
   fmtRange,
   fmtTime,
   istDate,
@@ -27,4 +29,10 @@ test("formatting", () => {
 test("addDays crosses months; weekday", () => {
   expect(addDays("2026-07-31", 1)).toBe("2026-08-01");
   expect(weekday("2026-08-02")).toBe(0);
+});
+
+test("fmtDate and fmtPhone", () => {
+  expect(fmtDate(atIst("2026-07-31", "14:30"))).toBe("Fri, 31 Jul 2026");
+  expect(fmtPhone("919709516759")).toBe("+91 97095 16759");
+  expect(fmtPhone("15552010753")).toBe("+15552010753");
 });

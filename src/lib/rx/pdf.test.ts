@@ -1,47 +1,68 @@
+import { writeFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import { expect, test } from "vitest";
+import { JPG_1PX, PNG_1PX } from "../bot/test-kit";
 import { renderPrescription, rxNo } from "./pdf";
 
-// 1x1 PNG
-const PNG = Uint8Array.from(
-  atob(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  ),
-  (ch) => ch.charCodeAt(0),
-);
+const SAMPLE = `Tablet Augmentin 625 1-0-1 after food 3 days
+Erinac P 100mg/500mg Tablet 1-0-1 AF 3d
+Montair LC 5mg/10mg Tablet 0-0-1 after food 5 days
+Pan D Tablet 1-0-1 BF 5 days
+Advice: Drink plenty of water. Review after 5 days if symptoms persist.`;
+
 const base = {
   clinic: "Sunrise Family Clinic",
-  doctorName: "Dr. Mehta",
-  regNo: "MMC-1",
+  doctorName: "Dr. Sushil Sharma",
+  regNo: "DR0000X00",
   rxNo: "RX-5B039563",
   patientName: "Raj",
-  patientPhone: "919111",
-  visit: "Thu, Jul 30, 2:30 PM–3:00 PM",
-  lines: ["Paracetamol 500mg"],
-  signature: { bytes: PNG, mime: "image/png" },
+  patientPhone: "919111111111",
+  date: "Fri, 31 Jul 2026",
+  time: "2:30 PM–3:00 PM",
+  text: SAMPLE,
+  signature: { bytes: PNG_1PX, mime: "image/png" },
 };
+
+const pages = async (b: Uint8Array) =>
+  (await PDFDocument.load(b)).getPageCount();
 
 test("rxNo", () =>
   expect(rxNo("5b039563-b504-41de-95a4-3508c01ba783")).toBe("RX-5B039563"));
-test("renders a one-page PDF with an en dash in the visit line", async () => {
+
+test("the sample prescription fits on one page", async () => {
   const bytes = await renderPrescription(base);
   expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
-  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  expect(await pages(bytes)).toBe(1);
+  if (process.env.RX_PREVIEW) writeFileSync(process.env.RX_PREVIEW, bytes);
 });
-test("80 lines spill onto a second page", async () => {
+
+test("a long list continues on more pages", async () => {
+  const text = Array.from(
+    { length: 30 },
+    (_, k) => `Medicine number ${k} 1-0-1 after food 5 days`,
+  ).join("\n");
+  expect(
+    await pages(await renderPrescription({ ...base, text })),
+  ).toBeGreaterThan(1);
+});
+
+test("a photo prescription with a caption, and non-Latin text, render", async () => {
   const bytes = await renderPrescription({
     ...base,
-    lines: Array.from({ length: 80 }, (_, i) => `Med ${i}`),
+    text: "Advice: टैबलेट after food 😀",
+    photo: { bytes: JPG_1PX, mime: "image/jpeg" },
   });
-  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
+  expect(await pages(bytes)).toBe(1);
 });
-test("embeds a photo and survives non-Latin text", async () => {
-  const bytes = await renderPrescription({
-    ...base,
-    lines: ["टैबलेट 1 😀 twice daily"],
-    photo: { bytes: PNG, mime: "image/png" },
-  });
-  expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThanOrEqual(
-    1,
-  );
+
+test("unparsed lines and an empty prescription still render", async () => {
+  expect(
+    await pages(
+      await renderPrescription({
+        ...base,
+        text: "Steam inhalation twice daily",
+      }),
+    ),
+  ).toBe(1);
+  expect(await pages(await renderPrescription({ ...base, text: "" }))).toBe(1);
 });

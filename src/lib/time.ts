@@ -37,3 +37,16 @@ export function fmtTime(d: Date): string {
 export function fmtRange(start: Date, end: Date): string {
   return `${fmtTime(start)}–${fmtTime(end)}`;
 }
+
+/** "Fri, 31 Jul 2026" */
+export function fmtDate(d: Date): string {
+  const p = (o: Intl.DateTimeFormatOptions) => part(d, o);
+  return `${p({ weekday: "short" })}, ${p({ day: "numeric" })} ${p({ month: "short" })} ${p({ year: "numeric" })}`;
+}
+
+/** "+91 97095 16759" for Indian numbers, else "+<digits>". */
+export function fmtPhone(digits: string): string {
+  return /^91\d{10}$/.test(digits)
+    ? `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`
+    : `+${digits}`;
+}
