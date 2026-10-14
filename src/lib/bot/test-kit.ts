@@ -21,6 +21,8 @@ export const DOC: Doctor = {
   lunchEnd: null,
   slotMinutes: 30,
   hoursSet: true,
+  standardFee: 0,
+  address: null,
 };
 export const NOW = atIst("2026-07-30", "09:00");
 

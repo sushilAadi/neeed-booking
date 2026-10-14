@@ -1,4 +1,12 @@
-import type { Appointment, Block, Conversation, Doctor, Store } from "./types";
+import type {
+  Activity,
+  Appointment,
+  Block,
+  Conversation,
+  Doctor,
+  Staff,
+  Store,
+} from "./types";
 
 export type MemoryStore = Store & {
   appointments: Appointment[];
@@ -13,9 +21,16 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
   const convs = new Map<string, Conversation>();
   const processed = new Set<string>();
   const files = new Map<string, Uint8Array>();
+  const staff: (Staff & { keyHash: string })[] = [];
+  const acts: Activity[] = [];
+  const fails: { ip: string; at: Date }[] = [];
   let seq = 0;
   const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
   const key = (a: string, b: string) => `${a}|${b}`;
+
+  const pub = ({ keyHash: _, ...s }: Staff & { keyHash: string }): Staff => ({
+    ...s,
+  });
 
   const conv = (phoneNumberId: string, waUser: string): Conversation =>
     convs.get(key(phoneNumberId, waUser)) ?? {
@@ -93,7 +108,14 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
       )
         return "slot_taken";
       const a: Appointment = {
+        patientAge: null,
+        patientGender: null,
+        patientArea: null,
+        source: "whatsapp",
+        createdBy: null,
         ...n,
+        fee: null,
+        completedBy: null,
         id: id(),
         status: "CONFIRMED",
         cancelReason: null,
@@ -138,6 +160,52 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
     },
     async signedUrl(bucket, path) {
       return `mem://${bucket}/${path}`;
+    },
+    async staffByKeyHash(hash) {
+      const s = staff.find((x) => x.keyHash === hash);
+      return s ? pub(s) : null;
+    },
+    async staffById(sid) {
+      const s = staff.find((x) => x.id === sid);
+      return s ? pub(s) : null;
+    },
+    async listStaff(did) {
+      return staff.filter((x) => x.doctorId === did).map(pub);
+    },
+    async createStaff(n) {
+      const s = {
+        ...n,
+        id: id(),
+        keyVersion: 1,
+        active: true,
+        createdAt: new Date(seq),
+        lastActiveAt: null,
+      };
+      staff.push(s);
+      return pub(s);
+    },
+    async updateStaff(sid, patch) {
+      const s = staff.find((x) => x.id === sid);
+      if (s) Object.assign(s, patch);
+    },
+    async logActivity(a, at) {
+      acts.push({ ...a, id: id(), at });
+    },
+    async activity(did, opts) {
+      return acts
+        .filter(
+          (a) =>
+            a.doctorId === did && (!opts.staffId || a.staffId === opts.staffId),
+        )
+        .sort((a, b) => +b.at - +a.at)
+        .slice(0, opts.limit)
+        .map((a) => ({ ...a }));
+    },
+    async loginFailures(ip, since) {
+      return fails.filter((f) => f.ip === ip && f.at >= since).length;
+    },
+    async addLoginFailure(ip, at) {
+      fails.push({ ip, at });
     },
   };
 }

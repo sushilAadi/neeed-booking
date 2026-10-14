@@ -22,6 +22,8 @@ const doc: Doctor = {
   lunchEnd: null,
   slotMinutes: 30,
   hoursSet: true,
+  standardFee: 0,
+  address: null,
 };
 const newApt: NewAppointment = {
   doctorId: "d1",
@@ -70,5 +72,80 @@ test("conversation defaults, save keeps lastInboundAt, touchInbound sets it", as
     state: "chat",
     ctx: { a: 1 },
     lastInboundAt: at,
+  });
+});
+
+test("staff: create, find by key hash, deactivate", async () => {
+  const s = createMemoryStore({ doctors: [doc] });
+  const st = await s.createStaff({
+    doctorId: "d1",
+    role: "reception",
+    name: "Riya",
+    keyHash: "h1",
+  });
+  expect(st).toMatchObject({ role: "reception", keyVersion: 1, active: true });
+  expect((await s.staffByKeyHash("h1"))?.id).toBe(st.id);
+  expect(await s.staffByKeyHash("nope")).toBe(null);
+  await s.updateStaff(st.id, { active: false, keyVersion: 2 });
+  expect(await s.staffById(st.id)).toMatchObject({
+    active: false,
+    keyVersion: 2,
+  });
+  expect((await s.listStaff("d1")).map((x) => x.name)).toEqual(["Riya"]);
+});
+
+test("activity is newest first and filters by staff", async () => {
+  const s = createMemoryStore({ doctors: [doc] });
+  const base = { doctorId: "d1", appointmentId: null, detail: {} };
+  await s.logActivity(
+    { ...base, actor: "A", staffId: "s1", action: "booked" },
+    new Date(1000),
+  );
+  await s.logActivity(
+    { ...base, actor: "B", staffId: "s2", action: "cancelled" },
+    new Date(2000),
+  );
+  expect((await s.activity("d1", { limit: 10 })).map((a) => a.actor)).toEqual([
+    "B",
+    "A",
+  ]);
+  expect(
+    (await s.activity("d1", { limit: 10, staffId: "s1" })).map((a) => a.action),
+  ).toEqual(["booked"]);
+  expect(await s.activity("d1", { limit: 1 })).toHaveLength(1);
+});
+
+test("login failures count only since the given time", async () => {
+  const s = createMemoryStore({ doctors: [doc] });
+  await s.addLoginFailure("1.2.3.4", new Date(1000));
+  await s.addLoginFailure("1.2.3.4", new Date(5000));
+  await s.addLoginFailure("9.9.9.9", new Date(5000));
+  expect(await s.loginFailures("1.2.3.4", new Date(2000))).toBe(1);
+});
+
+test("new appointment fields are stored; source defaults to whatsapp", async () => {
+  const s = createMemoryStore({ doctors: [doc] });
+  const a = await s.createAppointment(newApt);
+  expect(a).toMatchObject({
+    source: "whatsapp",
+    patientAge: null,
+    fee: null,
+    createdBy: null,
+  });
+  const b = await s.createAppointment({
+    ...newApt,
+    startsAt: atIst("2026-07-30", "15:00"),
+    patientAge: 45,
+    patientGender: "M",
+    patientArea: "Tezpur",
+    source: "reception",
+    createdBy: "Riya (Reception)",
+  });
+  expect(b).toMatchObject({
+    patientAge: 45,
+    patientGender: "M",
+    patientArea: "Tezpur",
+    source: "reception",
+    createdBy: "Riya (Reception)",
   });
 });

@@ -1,6 +1,13 @@
 // Server only: uses SUPABASE_SECRET_KEY. Never import from a client component.
 import { createClient } from "@supabase/supabase-js";
-import type { Appointment, Block, Doctor, Store } from "./types";
+import type {
+  Activity,
+  Appointment,
+  Block,
+  Doctor,
+  Staff,
+  Store,
+} from "./types";
 
 // biome-ignore lint/suspicious/noExplicitAny: untyped Supabase rows, mapped field by field below
 type Row = Record<string, any>;
@@ -24,6 +31,8 @@ const toDoctor = (r: Row): Doctor => ({
   lunchEnd: r.lunch_end,
   slotMinutes: r.slot_minutes,
   hoursSet: r.hours_set,
+  standardFee: r.standard_fee ?? 0,
+  address: r.address ?? null,
 });
 
 const DOCTOR_COLS: Record<string, string> = {
@@ -39,6 +48,8 @@ const DOCTOR_COLS: Record<string, string> = {
   lunchEnd: "lunch_end",
   slotMinutes: "slot_minutes",
   hoursSet: "hours_set",
+  standardFee: "standard_fee",
+  address: "address",
 };
 
 const toAppointment = (r: Row): Appointment => ({
@@ -55,7 +66,43 @@ const toAppointment = (r: Row): Appointment => ({
   prescriptionText: r.prescription_text,
   prescriptionImagePath: r.prescription_image_path,
   prescriptionPdfPath: r.prescription_pdf_path,
+  patientAge: r.patient_age,
+  patientGender: r.patient_gender,
+  patientArea: r.patient_area,
+  source: r.source,
+  fee: r.fee,
+  createdBy: r.created_by,
+  completedBy: r.completed_by,
 });
+
+const toStaff = (r: Row): Staff => ({
+  id: r.id,
+  doctorId: r.doctor_id,
+  role: r.role,
+  name: r.name,
+  keyVersion: r.key_version,
+  active: r.active,
+  createdAt: new Date(r.created_at),
+  lastActiveAt: r.last_active_at ? new Date(r.last_active_at) : null,
+});
+
+const toActivity = (r: Row): Activity => ({
+  id: r.id,
+  doctorId: r.doctor_id,
+  actor: r.actor,
+  staffId: r.staff_id,
+  action: r.action,
+  appointmentId: r.appointment_id,
+  detail: r.detail ?? {},
+  at: new Date(r.at),
+});
+
+const STAFF_COLS: Record<string, string> = {
+  keyHash: "key_hash",
+  keyVersion: "key_version",
+  active: "active",
+  lastActiveAt: "last_active_at",
+};
 
 const APPT_COLS: Record<string, string> = {
   patientPhone: "patient_phone",
@@ -69,6 +116,13 @@ const APPT_COLS: Record<string, string> = {
   prescriptionText: "prescription_text",
   prescriptionImagePath: "prescription_image_path",
   prescriptionPdfPath: "prescription_pdf_path",
+  patientAge: "patient_age",
+  patientGender: "patient_gender",
+  patientArea: "patient_area",
+  source: "source",
+  fee: "fee",
+  createdBy: "created_by",
+  completedBy: "completed_by",
 };
 
 function must<T>(res: { data: T; error: { message: string } | null }): T {
@@ -202,6 +256,11 @@ export function createSupabaseStore(): Store {
           starts_at: n.startsAt.toISOString(),
           ends_at: n.endsAt.toISOString(),
           notes: n.notes,
+          patient_age: n.patientAge ?? null,
+          patient_gender: n.patientGender ?? null,
+          patient_area: n.patientArea ?? null,
+          source: n.source ?? "whatsapp",
+          created_by: n.createdBy ?? null,
         })
         .select("*")
         .single();
@@ -288,6 +347,85 @@ export function createSupabaseStore(): Store {
       );
       if (!data) throw new Error(`no signed url for ${bucket}/${path}`);
       return data.signedUrl;
+    },
+    async staffByKeyHash(hash) {
+      const r = must(
+        await db.from("staff").select("*").eq("key_hash", hash).maybeSingle(),
+      );
+      return r ? toStaff(r) : null;
+    },
+    async staffById(id) {
+      const r = must(
+        await db.from("staff").select("*").eq("id", id).maybeSingle(),
+      );
+      return r ? toStaff(r) : null;
+    },
+    async listStaff(did) {
+      const rows = must(
+        await db
+          .from("staff")
+          .select("*")
+          .eq("doctor_id", did)
+          .order("created_at"),
+      );
+      return (rows ?? []).map(toStaff);
+    },
+    async createStaff(n) {
+      const r = must(
+        await db
+          .from("staff")
+          .insert({
+            doctor_id: n.doctorId,
+            role: n.role,
+            name: n.name,
+            key_hash: n.keyHash,
+          })
+          .select("*")
+          .single(),
+      );
+      if (!r) throw new Error("staff insert returned no row");
+      return toStaff(r);
+    },
+    async updateStaff(id, patch) {
+      const row: Row = {};
+      for (const [k, v] of Object.entries(patch))
+        row[STAFF_COLS[k]] = v instanceof Date ? v.toISOString() : v;
+      must(await db.from("staff").update(row).eq("id", id));
+    },
+    async logActivity(a, at) {
+      must(
+        await db.from("activity").insert({
+          doctor_id: a.doctorId,
+          actor: a.actor,
+          staff_id: a.staffId,
+          action: a.action,
+          appointment_id: a.appointmentId,
+          detail: a.detail,
+          at: at.toISOString(),
+        }),
+      );
+    },
+    async activity(did, opts) {
+      let q = db.from("activity").select("*").eq("doctor_id", did);
+      if (opts.staffId) q = q.eq("staff_id", opts.staffId);
+      const rows = must(
+        await q.order("at", { ascending: false }).limit(opts.limit),
+      );
+      return (rows ?? []).map(toActivity);
+    },
+    async loginFailures(ip, since) {
+      const { count, error } = await db
+        .from("login_attempts")
+        .select("*", { count: "exact", head: true })
+        .eq("ip", ip)
+        .gte("at", since.toISOString());
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    async addLoginFailure(ip, at) {
+      must(
+        await db.from("login_attempts").insert({ ip, at: at.toISOString() }),
+      );
     },
   };
 }
