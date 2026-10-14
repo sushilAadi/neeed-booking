@@ -1,7 +1,21 @@
-import type { Appointment, Conversation } from "../db/types";
+import type {
+  Appointment,
+  Conversation,
+  Doctor,
+  HoursPatch,
+} from "../db/types";
 import { renderPrescription, rxNo } from "../rx/pdf";
-import { parseRange, periodRange } from "../slots";
-import { addDays, atIst, fmtDay, fmtRange } from "../time";
+import {
+  lunchHours,
+  overlapsAny,
+  PERIODS,
+  type Period,
+  parseRange,
+  periodHours,
+  periodRange,
+  type Range,
+} from "../slots";
+import { addDays, atIst, fmtDay, fmtRange, fmtTime } from "../time";
 import { windowOpen } from "../wa/deliver";
 import type { Out, Send } from "../wa/types";
 import { type BotCtx, input, platformId, saveState, say, today } from "./ctx";
@@ -30,6 +44,7 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
 
   if (conv.state === "setup_reg") return setupReg(c, conv);
   if (conv.state === "setup_sig") return setupSig(c, conv);
+  if (conv.state.startsWith("hrs_")) return hoursStep(c, conv);
   if (i === "setup") return startSetup(c, conv);
   if (!setupDone) {
     await saveState(c.store, conv, "setup_reg");
@@ -37,6 +52,16 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
       say("Your prescription setup isn't done yet — let's finish that first."),
       say(REG_PROMPT),
     ];
+  }
+  if (!c.doctor.hoursSet)
+    return [
+      say("One more setup step: your clinic hours."),
+      ...(await askHours(c, conv, "morning", "setup")),
+    ];
+  if (i === "hours") return hoursMenu(c, conv);
+  if (i?.startsWith("h:")) {
+    const k = i.slice(2) as HoursKey;
+    if (HOURS_KEYS.includes(k)) return askHours(c, conv, k, "edit");
   }
 
   if (i === "menu" || i === "hi") return menu(c, conv);
@@ -160,6 +185,11 @@ async function setupSig(c: BotCtx, conv: Conversation): Promise<Reply[]> {
     mime === "image/png" ? "image/png" : "image/jpeg",
   );
   await c.store.updateDoctor(c.doctor.id, { signaturePath: path });
+  if (!c.doctor.hoursSet)
+    return [
+      say("Signature saved. Now your clinic hours."),
+      ...(await askHours(c, conv, "morning", "setup")),
+    ];
   return [
     say(
       'Setup saved. Reply "setup" any time to update your registration number or signature.',
@@ -183,6 +213,7 @@ async function menu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
           : { id: "close", title: "Close today" },
         { id: "block", title: "Block my time" },
         { id: "dcancel", title: "Cancel appointment" },
+        { id: "hours", title: "Clinic hours" },
         { id: "setup", title: "Prescription setup" },
       ],
     },
@@ -409,8 +440,19 @@ async function blockPreset(
   p: "whole" | "morning" | "afternoon",
 ): Promise<Reply[]> {
   const date = conv.ctx.date as string;
-  const { start, end } = periodRange(c.doctor, date, p);
-  return blockCheck(c, conv, { date, start, end, whole: p === "whole" });
+  if (p === "whole")
+    return blockCheck(c, conv, {
+      date,
+      start: atIst(date, "00:00"),
+      end: atIst(addDays(date, 1), "00:00"),
+      whole: true,
+    });
+  const range = periodRange(c.doctor, date, p);
+  if (!range) {
+    await saveState(c.store, conv, "idle");
+    return [say(`Your ${p} hours are Off, so there's nothing to block.`)];
+  }
+  return blockCheck(c, conv, { date, ...range, whole: false });
 }
 
 const pendingBlock = (conv: Conversation): PendingBlock => ({
@@ -594,5 +636,143 @@ async function markDone(
       },
     },
     say("Saved and sent to the patient."),
+  ];
+}
+
+// ---- clinic hours ----
+type HoursKey = Period | "lunch" | "slot";
+const HOURS_KEYS: HoursKey[] = [
+  "morning",
+  "afternoon",
+  "evening",
+  "lunch",
+  "slot",
+];
+const LABEL: Record<HoursKey, string> = {
+  morning: "Morning",
+  afternoon: "Afternoon",
+  evening: "Evening",
+  lunch: "Lunch break",
+  slot: "Time per patient",
+};
+
+const hmText = (hm: string) => fmtTime(atIst("2026-01-01", hm));
+const rangeText = (r: Range | null, none = "Off") =>
+  r ? `${hmText(r.start)}–${hmText(r.end)}` : none;
+
+export function hoursSummary(d: Doctor): string {
+  return [
+    "Clinic hours",
+    ...PERIODS.map((p) => `${LABEL[p]}: ${rangeText(periodHours(d, p))}`),
+    `Lunch break: ${rangeText(lunchHours(d), "None")}`,
+    `Time per patient: ${d.slotMinutes} min`,
+  ].join("\n");
+}
+
+async function hoursMenu(c: BotCtx, conv: Conversation): Promise<Reply[]> {
+  await saveState(c.store, conv, "idle");
+  return [
+    say(hoursSummary(c.doctor)),
+    {
+      kind: "list",
+      body: "What do you want to change? Existing bookings are always kept.",
+      button: "Change",
+      rows: HOURS_KEYS.map((k) => ({ id: `h:${k}`, title: LABEL[k] })),
+    },
+  ];
+}
+
+function hoursQuestion(d: Doctor, k: HoursKey): Out {
+  if (k === "slot")
+    return {
+      kind: "list",
+      body: `How long is each appointment? Now: ${d.slotMinutes} min.`,
+      button: "Choose length",
+      rows: [15, 30, 45, 60].map((m) => ({
+        id: `s:${m}`,
+        title: `${m} minutes`,
+      })),
+    };
+  const isLunch = k === "lunch";
+  const now = isLunch
+    ? rangeText(lunchHours(d), "None")
+    : rangeText(periodHours(d, k));
+  return {
+    kind: "buttons",
+    body: `${isLunch ? "Lunch break" : `${LABEL[k]} hours`}? Now: ${now}.\nType new hours like "${isLunch ? "1pm-2pm" : "9am-1pm"}", or tap a button.`,
+    buttons: [
+      { id: "keep", title: "Keep current" },
+      { id: "off", title: isLunch ? "No lunch break" : "Off" },
+    ],
+  };
+}
+
+async function askHours(
+  c: BotCtx,
+  conv: Conversation,
+  k: HoursKey,
+  mode: "setup" | "edit",
+): Promise<Reply[]> {
+  await saveState(c.store, conv, `hrs_${k}`, { mode });
+  return [hoursQuestion(c.doctor, k)];
+}
+
+async function hoursStep(c: BotCtx, conv: Conversation): Promise<Reply[]> {
+  const k = conv.state.slice(4) as HoursKey;
+  const mode = conv.ctx.mode === "edit" ? "edit" : "setup";
+  const i = input(c.msg);
+  const again = (why?: string): Reply[] => [
+    ...(why ? [say(why)] : []),
+    hoursQuestion(c.doctor, k),
+  ];
+  let patch: HoursPatch = {};
+
+  if (k === "slot") {
+    const m = Number(i?.startsWith("s:") ? i.slice(2) : Number.NaN);
+    if (![15, 30, 45, 60].includes(m)) return again();
+    patch = { slotMinutes: m };
+  } else if (i === "keep") {
+    patch = {};
+  } else if (i === "off") {
+    patch = { [`${k}Start`]: null, [`${k}End`]: null };
+  } else {
+    const range = c.msg.type === "text" ? parseRange(c.msg.text ?? "") : null;
+    if (!range)
+      return again(
+        `Couldn't read that. Type it like "${k === "lunch" ? "1pm-2pm" : "9am-1pm"}", or tap a button.`,
+      );
+    if (k !== "lunch") {
+      const clash = PERIODS.filter((p) => p !== k).find((p) => {
+        const other = periodHours(c.doctor, p);
+        return other && overlapsAny(range, [other]);
+      });
+      if (clash)
+        return again(
+          `That overlaps your ${clash} hours (${rangeText(periodHours(c.doctor, clash))}). Type different hours, or tap a button.`,
+        );
+    }
+    patch = { [`${k}Start`]: range.start, [`${k}End`]: range.end };
+  }
+
+  const last = k === "slot";
+  if (mode === "setup" && last) patch.hoursSet = true;
+  if (Object.keys(patch).length) await c.store.updateDoctor(c.doctor.id, patch);
+  const d: Doctor = { ...c.doctor, ...patch };
+
+  if (mode === "edit") {
+    await saveState(c.store, conv, "idle");
+    return [say(`Saved. Existing bookings are kept.\n\n${hoursSummary(d)}`)];
+  }
+  if (!last) {
+    const next = HOURS_KEYS[HOURS_KEYS.indexOf(k) + 1];
+    await saveState(c.store, conv, `hrs_${next}`, { mode });
+    return [hoursQuestion(d, next)];
+  }
+  return [
+    say(
+      'Setup saved. Reply "setup" any time to update your registration number or signature, or "hours" to change your clinic hours.',
+    ),
+    say(hoursSummary(d)),
+    ...(await menu({ ...c, doctor: d }, conv)),
   ];
 }

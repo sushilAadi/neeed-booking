@@ -3,17 +3,63 @@ import { atIst, weekday } from "./time";
 
 export type Hours = Pick<
   Doctor,
-  | "dayStart"
-  | "dayEnd"
-  | "slotMinutes"
+  | "morningStart"
   | "morningEnd"
+  | "afternoonStart"
   | "afternoonEnd"
+  | "eveningStart"
+  | "eveningEnd"
+  | "lunchStart"
+  | "lunchEnd"
+  | "slotMinutes"
   | "workingDays"
 >;
 export type Slot = { start: Date; end: Date };
 export type Period = "morning" | "afternoon" | "evening";
+export const PERIODS: Period[] = ["morning", "afternoon", "evening"];
+export type Range = { start: string; end: string };
 
 const MIN = 60_000;
+
+/** The period's "HH:MM" range, or null when it is Off. */
+export function periodHours(h: Hours, p: Period): Range | null {
+  const start = h[`${p}Start`];
+  const end = h[`${p}End`];
+  return start && end ? { start, end } : null;
+}
+
+export function lunchHours(h: Hours): Range | null {
+  return h.lunchStart && h.lunchEnd
+    ? { start: h.lunchStart, end: h.lunchEnd }
+    : null;
+}
+
+/** Ranges overlap when each starts before the other ends ("HH:MM" compares as text). */
+export const overlapsAny = (r: Range, others: Range[]) =>
+  others.some((o) => r.start < o.end && o.start < r.end);
+
+function slotsOf(h: Hours, date: string, p: Period): Slot[] {
+  const r = periodHours(h, p);
+  if (!r) return [];
+  const step = h.slotMinutes * MIN;
+  const last = atIst(date, r.end).getTime();
+  const lunch = lunchHours(h);
+  const lunchR = lunch && {
+    start: atIst(date, lunch.start),
+    end: atIst(date, lunch.end),
+  };
+  const out: Slot[] = [];
+  for (let t = atIst(date, r.start).getTime(); t + step <= last; ) {
+    const s = { start: new Date(t), end: new Date(t + step) };
+    if (lunchR && s.start < lunchR.end && lunchR.start < s.end) {
+      t = Math.max(t + step, lunchR.end.getTime()); // restart the grid after lunch
+      continue;
+    }
+    out.push(s);
+    t += step;
+  }
+  return out;
+}
 
 export function freeSlots(
   h: Hours,
@@ -22,41 +68,48 @@ export function freeSlots(
   now: Date,
 ): Slot[] {
   if (!h.workingDays.includes(weekday(date))) return [];
-  const out: Slot[] = [];
-  const last = atIst(date, h.dayEnd).getTime();
-  for (
-    let t = atIst(date, h.dayStart).getTime();
-    t + h.slotMinutes * MIN <= last;
-    t += h.slotMinutes * MIN
-  ) {
-    const s = { start: new Date(t), end: new Date(t + h.slotMinutes * MIN) };
-    if (s.start <= now) continue;
-    if (busy.some((b) => b.start < s.end && b.end > s.start)) continue;
-    out.push(s);
-  }
-  return out;
+  return byPeriodAll(h, date)
+    .filter((s) => s.start > now)
+    .filter((s) => !busy.some((b) => b.start < s.end && b.end > s.start));
 }
 
-export function periodRange(h: Hours, date: string, p: Period | "whole"): Slot {
-  const [from, to] = {
-    whole: [h.dayStart, h.dayEnd],
-    morning: [h.dayStart, h.morningEnd],
-    afternoon: [h.morningEnd, h.afternoonEnd],
-    evening: [h.afternoonEnd, h.dayEnd],
-  }[p];
-  return { start: atIst(date, from), end: atIst(date, to) };
+const byPeriodAll = (h: Hours, date: string) =>
+  PERIODS.flatMap((p) => slotsOf(h, date, p));
+
+/** The block range for a period (null when Off); "whole" spans the first to the last open period. */
+export function periodRange(
+  h: Hours,
+  date: string,
+  p: Period | "whole",
+): Slot | null {
+  const ranges = (p === "whole" ? PERIODS : [p])
+    .map((x) => periodHours(h, x))
+    .filter((r): r is Range => r !== null);
+  if (!ranges.length) return null;
+  const start = ranges.map((r) => r.start).sort()[0];
+  const end = ranges
+    .map((r) => r.end)
+    .sort()
+    .at(-1) as string;
+  return { start: atIst(date, start), end: atIst(date, end) };
 }
 
-export function periodOf(h: Hours, s: Slot): Period {
-  const hm = new Intl.DateTimeFormat("en-GB", {
+const istHm = (d: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kolkata",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).format(s.start);
-  if (hm < h.morningEnd) return "morning";
-  if (hm < h.afternoonEnd) return "afternoon";
-  return "evening";
+  }).format(d);
+
+export function periodOf(h: Hours, s: Slot): Period | null {
+  const hm = istHm(s.start);
+  return (
+    PERIODS.find((p) => {
+      const r = periodHours(h, p);
+      return r !== null && r.start <= hm && hm < r.end;
+    }) ?? null
+  );
 }
 
 export function byPeriod(h: Hours, slots: Slot[]): Record<Period, Slot[]> {
@@ -65,7 +118,10 @@ export function byPeriod(h: Hours, slots: Slot[]): Record<Period, Slot[]> {
     afternoon: [],
     evening: [],
   };
-  for (const s of slots) out[periodOf(h, s)].push(s);
+  for (const s of slots) {
+    const p = periodOf(h, s);
+    if (p) out[p].push(s);
+  }
   return out;
 }
 

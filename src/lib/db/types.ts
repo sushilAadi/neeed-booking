@@ -8,12 +8,36 @@ export type Doctor = {
   registrationNumber: string | null;
   signaturePath: string | null;
   workingDays: number[];
-  dayStart: string;
-  dayEnd: string;
+  /** "HH:MM" IST; a period whose start/end are null is Off. */
+  morningStart: string | null;
+  morningEnd: string | null;
+  afternoonStart: string | null;
+  afternoonEnd: string | null;
+  eveningStart: string | null;
+  eveningEnd: string | null;
+  /** Daily break; never offered to patients. */
+  lunchStart: string | null;
+  lunchEnd: string | null;
+  /** Appointment length in minutes (15/30/45/60). */
   slotMinutes: number;
-  morningEnd: string;
-  afternoonEnd: string;
+  /** Clinic hours confirmed in setup. */
+  hoursSet: boolean;
 };
+export type HoursPatch = Partial<
+  Pick<
+    Doctor,
+    | "morningStart"
+    | "morningEnd"
+    | "afternoonStart"
+    | "afternoonEnd"
+    | "eveningStart"
+    | "eveningEnd"
+    | "lunchStart"
+    | "lunchEnd"
+    | "slotMinutes"
+    | "hoursSet"
+  >
+>;
 export type Appointment = {
   id: string;
   doctorId: string;
@@ -52,7 +76,8 @@ export interface Store {
   doctorByPersonalPhone(phone: string): Promise<Doctor | null>;
   updateDoctor(
     id: string,
-    patch: Partial<Pick<Doctor, "registrationNumber" | "signaturePath">>,
+    patch: Partial<Pick<Doctor, "registrationNumber" | "signaturePath">> &
+      HoursPatch,
   ): Promise<void>;
   getConversation(phoneNumberId: string, waUser: string): Promise<Conversation>; // default state "idle", ctx {}, lastInboundAt null
   saveConversation(c: Conversation): Promise<void>; // writes state + ctx only

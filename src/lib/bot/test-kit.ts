@@ -11,11 +11,16 @@ export const DOC: Doctor = {
   registrationNumber: "MMC-123",
   signaturePath: "doc-1.png",
   workingDays: [0, 1, 2, 3, 4, 5, 6],
-  dayStart: "10:00",
-  dayEnd: "22:00",
-  slotMinutes: 30,
+  morningStart: "10:00",
   morningEnd: "14:00",
+  afternoonStart: "14:00",
   afternoonEnd: "18:00",
+  eveningStart: "18:00",
+  eveningEnd: "22:00",
+  lunchStart: null,
+  lunchEnd: null,
+  slotMinutes: 30,
+  hoursSet: true,
 };
 export const NOW = atIst("2026-07-30", "09:00");
 

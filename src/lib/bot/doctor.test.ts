@@ -24,8 +24,15 @@ const jpeg = async () => ({
   bytes: JPG_1PX,
   mime: "image/jpeg",
 });
-const run = (s: MemoryStore, msg: Incoming, doctor: Doctor = DOC, now = NOW) =>
-  handleDoctor({ store: s, doctor, msg, now, media: jpeg });
+// Like production: the doctor row is read fresh for every message unless a test pins one.
+const run = async (s: MemoryStore, msg: Incoming, doctor?: Doctor, now = NOW) =>
+  handleDoctor({
+    store: s,
+    doctor: doctor ?? (await s.doctorByPersonalPhone(D)) ?? DOC,
+    msg,
+    now,
+    media: jpeg,
+  });
 const t = (body: string) => text(D, body, undefined, PL);
 const r = (id: string) => reply(D, id, undefined, PL);
 const book = (
@@ -77,13 +84,21 @@ test("menu shows 'Close today' when open and 'Open today' when closed", async ()
   const s = createMemoryStore({ doctors: [DOC] });
   const [m] = await run(s, t("hi"));
   expect(bodies([m])).toEqual(["Hi Dr. Mehta. What would you like to do?"]);
-  expect(ids(m)).toEqual(["today", "close", "block", "dcancel", "setup"]);
+  expect(ids(m)).toEqual([
+    "today",
+    "close",
+    "block",
+    "dcancel",
+    "hours",
+    "setup",
+  ]);
   await s.setClosed(DOC.id, "2026-07-30", true);
   expect(ids((await run(s, t("menu")))[0])).toEqual([
     "today",
     "open",
     "block",
     "dcancel",
+    "hours",
     "setup",
   ]);
 });
@@ -437,4 +452,154 @@ test("a 'Cancel & notify' tap left over from yesterday re-prompts instead of can
     "CONFIRMED",
   );
   expect(await s.isClosed(DOC.id, "2026-07-31")).toBe(false);
+});
+
+// ---- clinic hours ----
+const MORNING_Q = (now: string) =>
+  `Morning hours? Now: ${now}.\nType new hours like "9am-1pm", or tap a button.`;
+const SUMMARY = (m: string, a: string, e: string, l: string, slot: string) =>
+  `Clinic hours\nMorning: ${m}\nAfternoon: ${a}\nEvening: ${e}\nLunch break: ${l}\nTime per patient: ${slot}`;
+
+test("first-time setup continues into clinic hours after the signature", async () => {
+  const fresh = {
+    ...DOC,
+    registrationNumber: null,
+    signaturePath: null,
+    hoursSet: false,
+  };
+  const s = createMemoryStore({ doctors: [fresh] });
+  await run(s, t("hi"));
+  await run(s, t("MMC-555"));
+  const afterSig = await run(s, image(D, "SIG", undefined, undefined, PL));
+  expect(bodies(afterSig)).toEqual([
+    "Signature saved. Now your clinic hours.",
+    MORNING_Q("10:00 AM–2:00 PM"),
+  ]);
+  expect(ids(afterSig[1])).toEqual(["keep", "off"]);
+  expect(bodies(await run(s, t("9am-1pm")))[0]).toContain(
+    "Afternoon hours? Now: 2:00 PM–6:00 PM.",
+  );
+  await run(s, t("3pm-6pm"));
+  expect(bodies(await run(s, r("off")))[0]).toContain(
+    "Lunch break? Now: None.",
+  );
+  const slotQ = await run(s, t("12:30pm-1pm"));
+  expect(slotQ[0].msg).toMatchObject({ kind: "list", button: "Choose length" });
+  expect(ids(slotQ[0])).toEqual(["s:15", "s:30", "s:45", "s:60"]);
+  const done = await run(s, r("s:15"));
+  expect(bodies(done)[0]).toBe(
+    'Setup saved. Reply "setup" any time to update your registration number or signature, or "hours" to change your clinic hours.',
+  );
+  expect(bodies(done)[1]).toBe(
+    SUMMARY(
+      "9:00 AM–1:00 PM",
+      "3:00 PM–6:00 PM",
+      "Off",
+      "12:30 PM–1:00 PM",
+      "15 min",
+    ),
+  );
+  expect(done[2].msg.kind).toBe("list");
+  expect(await s.doctorByPersonalPhone(D)).toMatchObject({
+    morningStart: "09:00",
+    morningEnd: "13:00",
+    afternoonStart: "15:00",
+    afternoonEnd: "18:00",
+    eveningStart: null,
+    eveningEnd: null,
+    lunchStart: "12:30",
+    lunchEnd: "13:00",
+    slotMinutes: 15,
+    hoursSet: true,
+  });
+});
+
+test("an existing doctor without hours is asked for them once", async () => {
+  const s = createMemoryStore({ doctors: [{ ...DOC, hoursSet: false }] });
+  const out = await run(s, t("hi"));
+  expect(bodies(out)).toEqual([
+    "One more setup step: your clinic hours.",
+    MORNING_Q("10:00 AM–2:00 PM"),
+  ]);
+  await run(s, r("keep"));
+  await run(s, r("keep"));
+  await run(s, r("keep"));
+  await run(s, r("keep"));
+  await run(s, r("s:30"));
+  expect((await s.doctorByPersonalPhone(D))?.hoursSet).toBe(true);
+  expect(ids((await run(s, t("hi")))[0])).toContain("today");
+});
+
+test("hours from the menu: change lunch break; bookings are kept", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await book(s, "919111", "13:00", "13:30");
+  const [summary, list] = await run(s, r("hours"));
+  expect(bodies([summary])[0]).toBe(
+    SUMMARY(
+      "10:00 AM–2:00 PM",
+      "2:00 PM–6:00 PM",
+      "6:00 PM–10:00 PM",
+      "None",
+      "30 min",
+    ),
+  );
+  expect(ids(list)).toEqual([
+    "h:morning",
+    "h:afternoon",
+    "h:evening",
+    "h:lunch",
+    "h:slot",
+  ]);
+  expect(bodies(await run(s, r("h:lunch")))[0]).toContain(
+    "Lunch break? Now: None.",
+  );
+  const saved = await run(s, t("1pm-2pm"));
+  expect(bodies(saved)[0]).toBe(
+    `Saved. Existing bookings are kept.\n\n${SUMMARY("10:00 AM–2:00 PM", "2:00 PM–6:00 PM", "6:00 PM–10:00 PM", "1:00 PM–2:00 PM", "30 min")}`,
+  );
+  expect(s.appointments[0].status).toBe("CONFIRMED");
+});
+
+test("overlapping hours are rejected and the question repeats", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("hours"));
+  await run(s, r("h:morning"));
+  const out = await run(s, t("10am-3pm"));
+  expect(bodies(out)[0]).toBe(
+    "That overlaps your afternoon hours (2:00 PM–6:00 PM). Type different hours, or tap a button.",
+  );
+  expect(bodies(out)[1]).toBe(MORNING_Q("10:00 AM–2:00 PM"));
+  expect((await s.doctorByPersonalPhone(D))?.morningEnd).toBe("14:00");
+});
+
+test("unreadable hours repeat the question", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("hours"));
+  await run(s, r("h:evening"));
+  const out = await run(s, t("late"));
+  expect(bodies(out)[0]).toBe(
+    'Couldn\'t read that. Type it like "9am-1pm", or tap a button.',
+  );
+});
+
+test("evening Off from the menu", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, r("hours"));
+  await run(s, r("h:evening"));
+  await run(s, r("off"));
+  expect(await s.doctorByPersonalPhone(D)).toMatchObject({
+    eveningStart: null,
+    eveningEnd: null,
+  });
+});
+
+test("blocking a period that is Off says so", async () => {
+  const s = createMemoryStore({
+    doctors: [{ ...DOC, morningStart: null, morningEnd: null }],
+  });
+  await run(s, r("block"));
+  await run(s, r("d:2026-07-31"));
+  expect(bodies(await run(s, r("r:morning")))).toEqual([
+    "Your morning hours are Off, so there's nothing to block.",
+  ]);
 });

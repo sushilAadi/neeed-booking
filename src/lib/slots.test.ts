@@ -1,15 +1,26 @@
 import { expect, test } from "vitest";
-import { byPeriod, freeSlots, parseRange, periodRange } from "./slots";
+import {
+  byPeriod,
+  freeSlots,
+  type Hours,
+  overlapsAny,
+  parseRange,
+  periodRange,
+} from "./slots";
 import { atIst } from "./time";
 
 const H = {
-  dayStart: "10:00",
-  dayEnd: "22:00",
-  slotMinutes: 30,
+  morningStart: "10:00",
   morningEnd: "14:00",
+  afternoonStart: "14:00",
   afternoonEnd: "18:00",
+  eveningStart: "18:00",
+  eveningEnd: "22:00",
+  lunchStart: null,
+  lunchEnd: null,
+  slotMinutes: 30,
   workingDays: [0, 1, 2, 3, 4, 5, 6],
-};
+} as Hours;
 const early = new Date("2026-07-30T00:00:00Z");
 
 test("24 slots in a full open day", () =>
@@ -56,3 +67,73 @@ test.each(["5pm-2pm", "lunch", "25:00-26:00", ""])(
   "parseRange rejects %s",
   (i) => expect(parseRange(i)).toBeNull(),
 );
+
+// ---- clinic hours ----
+const D = "2026-07-30";
+test("lunch break 13:00-14:00 removes the 13:00 and 13:30 slots", () => {
+  const p = byPeriod(
+    { ...H, lunchStart: "13:00", lunchEnd: "14:00" } as Hours,
+    freeSlots(
+      { ...H, lunchStart: "13:00", lunchEnd: "14:00" } as Hours,
+      D,
+      [],
+      early,
+    ),
+  );
+  expect(p.morning.length).toBe(6);
+});
+test("a period that is Off has no slots", () => {
+  const h = { ...H, eveningStart: null, eveningEnd: null } as Hours;
+  const p = byPeriod(h, freeSlots(h, D, [], early));
+  expect([p.morning.length, p.afternoon.length, p.evening.length]).toEqual([
+    8, 8, 0,
+  ]);
+});
+test("gaps between periods are closed: morning 9-1, afternoon 3-6", () => {
+  const h = {
+    ...H,
+    morningStart: "09:00",
+    morningEnd: "13:00",
+    afternoonStart: "15:00",
+    afternoonEnd: "18:00",
+    eveningStart: null,
+    eveningEnd: null,
+  } as Hours;
+  const s = freeSlots(h, D, [], early);
+  expect(s).toHaveLength(8 + 6);
+  expect(s.some((x) => +x.start === +atIst(D, "13:30"))).toBe(false);
+});
+test("45-minute slots never cross the period end or the lunch break", () => {
+  const h = {
+    ...H,
+    slotMinutes: 45,
+    lunchStart: "13:00",
+    lunchEnd: "14:00",
+  } as Hours;
+  const morning = byPeriod(h, freeSlots(h, D, [], early)).morning;
+  // 10:00, 10:45, 11:30, 12:15 (12:15-13:00 ends at lunch); 13:00 is lunch
+  expect(morning.map((x) => +x.start)).toEqual(
+    ["10:00", "10:45", "11:30", "12:15"].map((t) => +atIst(D, t)),
+  );
+});
+test("periodRange of an Off period is null", () => {
+  expect(
+    periodRange(
+      { ...H, morningStart: null, morningEnd: null } as Hours,
+      D,
+      "morning",
+    ),
+  ).toBeNull();
+});
+test("overlapsAny", () => {
+  expect(
+    overlapsAny({ start: "13:00", end: "15:00" }, [
+      { start: "10:00", end: "14:00" },
+    ]),
+  ).toBe(true);
+  expect(
+    overlapsAny({ start: "14:00", end: "15:00" }, [
+      { start: "10:00", end: "14:00" },
+    ]),
+  ).toBe(false);
+});

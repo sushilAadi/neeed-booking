@@ -14,12 +14,32 @@ const toDoctor = (r: Row): Doctor => ({
   registrationNumber: r.registration_number,
   signaturePath: r.signature_path,
   workingDays: r.working_days,
-  dayStart: r.day_start,
-  dayEnd: r.day_end,
-  slotMinutes: r.slot_minutes,
+  morningStart: r.morning_start,
   morningEnd: r.morning_end,
+  afternoonStart: r.afternoon_start,
   afternoonEnd: r.afternoon_end,
+  eveningStart: r.evening_start,
+  eveningEnd: r.evening_end,
+  lunchStart: r.lunch_start,
+  lunchEnd: r.lunch_end,
+  slotMinutes: r.slot_minutes,
+  hoursSet: r.hours_set,
 });
+
+const DOCTOR_COLS: Record<string, string> = {
+  registrationNumber: "registration_number",
+  signaturePath: "signature_path",
+  morningStart: "morning_start",
+  morningEnd: "morning_end",
+  afternoonStart: "afternoon_start",
+  afternoonEnd: "afternoon_end",
+  eveningStart: "evening_start",
+  eveningEnd: "evening_end",
+  lunchStart: "lunch_start",
+  lunchEnd: "lunch_end",
+  slotMinutes: "slot_minutes",
+  hoursSet: "hours_set",
+};
 
 const toAppointment = (r: Row): Appointment => ({
   id: r.id,
@@ -86,9 +106,7 @@ export function createSupabaseStore(): Store {
     },
     async updateDoctor(id, patch) {
       const row: Row = {};
-      if ("registrationNumber" in patch)
-        row.registration_number = patch.registrationNumber;
-      if ("signaturePath" in patch) row.signature_path = patch.signaturePath;
+      for (const [k, v] of Object.entries(patch)) row[DOCTOR_COLS[k]] = v;
       must(await db.from("doctors").update(row).eq("id", id));
     },
     async getConversation(pn, u) {
