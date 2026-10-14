@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { createMemoryStore } from "../db/memory-store";
 import type { Send } from "../wa/types";
 import { routeIncoming } from "./route";
-import { bodies, DOC, NOW, text } from "./test-kit";
+import { bodies, DOC, NOW, reply, text } from "./test-kit";
 
 const collect = () => {
   const sent: Send[] = [];
@@ -43,8 +43,9 @@ test("doctor's personal phone on the platform number → doctor bot; other sende
     b.send,
     noMedia,
   );
+  // the patient bot: its first question is the language
   expect(bodies(b.sent)).toEqual([
-    "👋 Welcome to Sunrise Family Clinic. What would you like to do?",
+    "🙏 Sunrise Family Clinic\n\nChoose your language\nभाषा चुनें\nভাষা বাছক",
   ]);
 });
 
@@ -96,8 +97,10 @@ test("a handler error tells the sender to try again", async () => {
     throw new Error("db down");
   };
   await routeIncoming(s, text("911", "hi", "m7"), NOW, send, noMedia);
-  expect(bodies(sent)).toEqual([
+  // picking the language loads the menu, which hits the failing lookup
+  await routeIncoming(s, reply("911", "lang:en", "m8"), NOW, send, noMedia);
+  expect(bodies(sent).at(-1)).toBe(
     "Sorry, something went wrong — please try again.",
-  ]);
-  expect(sent[0]).toMatchObject({ from: "DOCPN", to: "911" });
+  );
+  expect(sent.at(-1)).toMatchObject({ from: "DOCPN", to: "911" });
 });

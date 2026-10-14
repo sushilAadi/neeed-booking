@@ -14,15 +14,36 @@ import {
 } from "./test-kit";
 
 const P = "919111111111";
+const LANG_IDS = ["lang:en", "lang:hi", "lang:as"];
 const PERIODS_Q =
   'Which part of today works for you?\n\nType "back" to change the name.';
-const run = (
+const raw = (
   s: ReturnType<typeof createMemoryStore>,
   msg: Parameters<typeof handlePatient>[0]["msg"],
   now = NOW,
-) => handlePatient({ store: s, doctor: DOC, msg, now });
+  doctor = DOC,
+) => handlePatient({ store: s, doctor, msg, now });
+/**
+ * Like production (inbound time recorded after each message), for a patient who
+ * already picked English in this conversation. The language tests use `raw`.
+ */
+const run = async (
+  s: ReturnType<typeof createMemoryStore>,
+  msg: Parameters<typeof handlePatient>[0]["msg"],
+  now = NOW,
+  doctor = DOC,
+) => {
+  const conv = await s.getConversation("DOCPN", msg.from);
+  if (!conv.ctx.lang && conv.state !== "chat")
+    await s.saveConversation({ ...conv, ctx: { ...conv.ctx, lang: "en" } });
+  if (!conv.lastInboundAt)
+    await s.touchInbound("DOCPN", msg.from, new Date(+now - 60_000));
+  const out = await raw(s, msg, now, doctor);
+  await s.touchInbound("DOCPN", msg.from, now);
+  return out;
+};
 
-test("first hi shows only Book and Normal chat", async () => {
+test("first hi shows only Book, Normal chat and Change language", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const [m] = await run(s, text(P, "hi"));
   expect(m.msg.kind).toBe("list");
@@ -30,7 +51,7 @@ test("first hi shows only Book and Normal chat", async () => {
   expect(bodies([m])[0]).toBe(
     "👋 Welcome to Sunrise Family Clinic. What would you like to do?",
   );
-  expect(ids(m)).toEqual(["book", "chat"]);
+  expect(ids(m)).toEqual(["book", "chat", "language"]);
 });
 
 test("menu shows mine + cancel when the patient has a confirmed appointment today", async () => {
@@ -44,7 +65,7 @@ test("menu shows mine + cancel when the patient has a confirmed appointment toda
     notes: null,
   });
   const [m] = await run(s, text(P, "hello"));
-  expect(ids(m)).toEqual(["book", "mine", "cancel", "chat"]);
+  expect(ids(m)).toEqual(["book", "mine", "cancel", "chat", "language"]);
 });
 
 test("Normal chat goes silent; a keyword wakes it", async () => {
@@ -54,16 +75,19 @@ test("Normal chat goes silent; a keyword wakes it", async () => {
   ]);
   await s.touchInbound("DOCPN", P, NOW);
   expect(await run(s, text(P, "how are you"))).toEqual([]);
-  expect(bodies(await run(s, text(P, "/book")))).toEqual([
+  // Normal chat ended the conversation: the keyword asks the language, then books
+  expect(ids((await run(s, text(P, "/book")))[0])).toEqual(LANG_IDS);
+  expect(bodies(await run(s, reply(P, "lang:en")))).toEqual([
     "Sure! What's the patient's full name?",
   ]);
 });
 
-test("chat mode shows the menu again after a 24h gap", async () => {
+test("chat mode asks the language again after a 24h gap, then shows the menu", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   await run(s, reply(P, "chat"));
   await s.touchInbound("DOCPN", P, new Date(+NOW - 25 * 3600_000));
-  const [m] = await run(s, text(P, "hello"));
+  expect(ids((await run(s, text(P, "hello")))[0])).toEqual(LANG_IDS);
+  const [m] = await run(s, reply(P, "lang:en"));
   expect(m.msg.kind).toBe("list");
 });
 
@@ -86,7 +110,7 @@ test("My Appointments lists today", async () => {
     notes: null,
   });
   expect(bodies(await run(s, reply(P, "mine")))).toEqual([
-    "Today:\n📅 2:30 PM–3:00 PM — Raj (CONFIRMED)",
+    "Today:\n📅 2:30 PM–3:00 PM — Raj (Confirmed)",
   ]);
 });
 
@@ -127,7 +151,7 @@ const toTimes = async (
   doctor = DOC,
 ) => {
   const h = (msg: Parameters<typeof handlePatient>[0]["msg"], now = NOW) =>
-    handlePatient({ store: s, doctor, msg, now });
+    run(s, msg, now, doctor);
   await h(reply(P, "book"));
   await h(text(P, "Raj"));
   return h(reply(P, `p:${period}`));
@@ -189,12 +213,7 @@ test("closed today → the closed message, no name prompt", async () => {
 test("not a working day → the closed message", async () => {
   const s = createMemoryStore({ doctors: [DOC] });
   const off = { ...DOC, workingDays: [1] };
-  const r = await handlePatient({
-    store: s,
-    doctor: off,
-    msg: reply(P, "book"),
-    now: NOW,
-  });
+  const r = await run(s, reply(P, "book"), NOW, off);
   expect(bodies(r)[0]).toContain("isn't taking bookings today");
 });
 
@@ -246,12 +265,7 @@ test("more than 9 free slots in a period → 8 rows + Later times + Back; more �
   expect(ids(list)).toHaveLength(10);
   expect(ids(list).slice(8)).toEqual(["more", "back"]);
   expect(titles(list)[8]).toBe("Later times");
-  const [next] = await handlePatient({
-    store: s,
-    doctor: D15,
-    msg: reply(P, "more"),
-    now: NOW,
-  });
+  const [next] = await run(s, reply(P, "more"), NOW, D15);
   expect(ids(next)).toHaveLength(9);
   expect(titles(next)[0]).toBe("12:00 PM–12:15 PM");
   expect(ids(next)[8]).toBe("back");
@@ -455,18 +469,9 @@ test("period choice with 3 periods says to type back; with fewer it has a Back b
   const s2 = createMemoryStore({
     doctors: [{ ...DOC, eveningStart: null, eveningEnd: null }],
   });
-  await handlePatient({
-    store: s2,
-    doctor: { ...DOC, eveningStart: null, eveningEnd: null },
-    msg: reply(P, "book"),
-    now: NOW,
-  });
-  const two = await handlePatient({
-    store: s2,
-    doctor: { ...DOC, eveningStart: null, eveningEnd: null },
-    msg: text(P, "Raj"),
-    now: NOW,
-  });
+  const noEve = { ...DOC, eveningStart: null, eveningEnd: null };
+  await run(s2, reply(P, "book"), NOW, noEve);
+  const two = await run(s2, text(P, "Raj"), NOW, noEve);
   expect(ids(two[0])).toEqual(["p:morning", "p:afternoon", "back"]);
   expect(bodies(await run(s, text(P, "back")))).toEqual([
     "Sure! What's the patient's full name?",
@@ -499,4 +504,67 @@ test("cancel: list Back → menu; reason Back → list", async () => {
     button: "Choose an option",
   });
   expect(s.appointments[0].status).toBe("CONFIRMED");
+});
+
+// ---- language: asked at the start of every conversation, never saved ----
+test("the first message asks the language; Hindi then shows the Hindi menu", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const [pick] = await raw(s, text(P, "hi"));
+  expect(bodies([pick])[0]).toBe(
+    "🙏 Sunrise Family Clinic\n\nChoose your language\nभाषा चुनें\nভাষা বাছক",
+  );
+  expect(ids(pick)).toEqual(LANG_IDS);
+  expect(titles(pick)).toEqual(["English", "हिन्दी", "অসমীয়া"]);
+  const [m] = await raw(s, reply(P, "lang:hi"));
+  expect(bodies([m])[0]).toBe(
+    "👋 Sunrise Family Clinic में आपका स्वागत है। आप क्या करना चाहेंगे?",
+  );
+  expect(titles(m)).toEqual(["अपॉइंटमेंट बुक करें", "सामान्य बातचीत", "भाषा बदलें"]);
+});
+
+test("a first /book keeps its intent: pick Assamese → straight to the name question", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  expect(ids((await raw(s, text(P, "/book")))[0])).toEqual(LANG_IDS);
+  expect(bodies(await raw(s, reply(P, "lang:as")))).toEqual([
+    "নিশ্চয়! ৰোগীৰ সম্পূৰ্ণ নাম কি?",
+  ]);
+});
+
+test("typing in the picker works: Devanagari → Hindi, '3' → Assamese, junk → asked again", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await raw(s, text(P, "hello"));
+  expect(ids((await raw(s, text(P, "xyz")))[0])).toEqual(LANG_IDS);
+  expect(bodies(await raw(s, text(P, "नमस्ते")))[0]).toContain("स्वागत");
+  const s2 = createMemoryStore({ doctors: [DOC] });
+  await raw(s2, text(P, "hello"));
+  expect(bodies(await raw(s2, text(P, "3")))[0]).toContain("স্বাগতম");
+});
+
+test("Hindi booking: questions and options translated, times stay as they are; next visit asks again", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, text(P, "hi"));
+  await run(s, reply(P, "lang:hi"));
+  expect(bodies(await run(s, text(P, "बुक")))).toEqual([
+    "ज़रूर! मरीज़ का पूरा नाम क्या है?",
+  ]);
+  const periods = await run(s, text(P, "राम"));
+  expect(titles(periods[0])).toEqual(["सुबह (8)", "दोपहर (8)", "शाम (8)"]);
+  const times = await run(s, reply(P, "p:afternoon"));
+  expect(titles(times[0])[0]).toBe("2:00 PM–2:30 PM");
+  expect(titles(times[0]).at(-1)).toBe("◀ वापस");
+  await run(s, reply(P, `t:${at("14:30").toISOString()}`));
+  const done = await run(s, reply(P, "skip"));
+  expect(bodies(done)[0]).toBe(
+    'Sunrise Family Clinic में Dr. Mehta के साथ आपकी अपॉइंटमेंट पक्की हो गई है।\n\n📅 Thu, Jul 30, 2:30 PM–3:00 PM\n\nरद्द करने के लिए कभी भी "cancel" लिखें।',
+  );
+  expect(bodies(done)[1]).toContain("New appointment booked"); // the doctor's alert stays English
+  // the booking ended the conversation: nothing saved, so the language is asked again
+  expect(ids((await raw(s, text(P, "hi")))[0])).toEqual(LANG_IDS);
+});
+
+test("Change language from the menu, mid-conversation", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  await run(s, text(P, "hi"));
+  expect(ids((await run(s, reply(P, "language")))[0])).toEqual(LANG_IDS);
+  expect(bodies(await run(s, reply(P, "lang:as")))[0]).toContain("স্বাগতম");
 });
