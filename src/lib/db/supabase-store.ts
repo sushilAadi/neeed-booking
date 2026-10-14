@@ -109,25 +109,21 @@ export function createSupabaseStore(): Store {
     },
     async saveConversation(c) {
       must(
-        await db
-          .from("conversations")
-          .upsert({
-            phone_number_id: c.phoneNumberId,
-            wa_user: c.waUser,
-            state: c.state,
-            ctx: c.ctx,
-          }),
+        await db.from("conversations").upsert({
+          phone_number_id: c.phoneNumberId,
+          wa_user: c.waUser,
+          state: c.state,
+          ctx: c.ctx,
+        }),
       );
     },
     async touchInbound(pn, u, at) {
       must(
-        await db
-          .from("conversations")
-          .upsert({
-            phone_number_id: pn,
-            wa_user: u,
-            last_inbound_at: at.toISOString(),
-          }),
+        await db.from("conversations").upsert({
+          phone_number_id: pn,
+          wa_user: u,
+          last_inbound_at: at.toISOString(),
+        }),
       );
     },
     async markProcessed(id) {
@@ -231,13 +227,11 @@ export function createSupabaseStore(): Store {
     },
     async addBlock(did, startsAt, endsAt) {
       must(
-        await db
-          .from("blocks")
-          .insert({
-            doctor_id: did,
-            starts_at: startsAt.toISOString(),
-            ends_at: endsAt.toISOString(),
-          }),
+        await db.from("blocks").insert({
+          doctor_id: did,
+          starts_at: startsAt.toISOString(),
+          ends_at: endsAt.toISOString(),
+        }),
       );
     },
     async putFile(bucket, path, bytes, contentType) {
