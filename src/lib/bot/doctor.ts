@@ -4,7 +4,7 @@ import {
   setClosedToday,
   validateHours,
 } from "../clinic/availability";
-import { cancelVisits } from "../clinic/visits";
+import { cancelVisits, completeWithoutRx } from "../clinic/visits";
 import type {
   Appointment,
   Conversation,
@@ -768,7 +768,7 @@ async function markDone(
   const a = await ownConfirmed(c, conv.ctx.appointmentId as string);
   if (!a) return todayList(c, conv);
   if (!rx) {
-    await c.store.updateAppointment(a.id, { status: "COMPLETED" });
+    await completeWithoutRx(c.store, c.doctor, a, c.now, { actor: asBot(c) });
     await saveState(c.store, conv, "idle");
     return [say("Marked complete.")];
   }
@@ -778,7 +778,9 @@ async function markDone(
     if (!c.media) throw new Error("media downloader missing");
     content = { photo: await c.media(rx.mediaId), caption: rx.caption || null };
   }
-  const toPatient = await completeVisit(c.store, c.doctor, a, content, c.now);
+  const toPatient = await completeVisit(c.store, c.doctor, a, content, c.now, {
+    actor: asBot(c),
+  });
   // only now: if anything above throws, the doctor stays in rx_input and can resend
   await saveState(c.store, conv, "idle");
   return toPatient ? [toPatient, say(SAVED_SENT)] : [say(SAVED_CLOSED)];

@@ -52,3 +52,58 @@ export async function cancelVisits(
   }
   return out;
 }
+
+/** The fee for this visit: typed for this visit, else the doctor's standard fee at this moment. */
+const feeFor = (doctor: Doctor, fee?: number) =>
+  fee !== undefined && fee >= 0 ? Math.round(fee) : doctor.standardFee;
+
+/** Mark a visit done with no prescription; the fee is saved now and never recomputed. */
+export async function completeWithoutRx(
+  store: Store,
+  doctor: Doctor,
+  a: Appointment,
+  now: Date,
+  opts: { fee?: number; actor: Actor },
+): Promise<void> {
+  await store.updateAppointment(a.id, {
+    status: "COMPLETED",
+    fee: feeFor(doctor, opts.fee),
+    completedBy: opts.actor.label,
+  });
+  await record(
+    store,
+    doctor.id,
+    opts.actor,
+    "completed",
+    { appointmentId: a.id },
+    now,
+  );
+}
+
+export async function setFee(
+  store: Store,
+  doctor: Doctor,
+  id: string,
+  fee: number,
+  actor: Actor,
+  now: Date,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const a = await ownAppointment(store, doctor.id, id);
+  if (!a) return { ok: false, message: "This visit no longer exists." };
+  if (a.status !== "COMPLETED")
+    return { ok: false, message: "Complete the visit first." };
+  if (!Number.isInteger(fee) || fee < 0)
+    return { ok: false, message: "Fee must be 0 or more." };
+  await store.updateAppointment(a.id, { fee });
+  await record(
+    store,
+    doctor.id,
+    actor,
+    "fee_changed",
+    { appointmentId: a.id, detail: { from: a.fee, to: fee } },
+    now,
+  );
+  return { ok: true };
+}
+
+export { feeFor };

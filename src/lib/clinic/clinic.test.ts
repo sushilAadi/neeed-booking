@@ -5,7 +5,12 @@ import { atIst } from "../time";
 import { addBlockRange, setClosedToday, validateHours } from "./availability";
 import { bookToday, validatePatient } from "./booking";
 import { lastPatientDetails, normalizePhone } from "./patient";
-import { cancelVisits, ownAppointment } from "./visits";
+import {
+  cancelVisits,
+  completeWithoutRx,
+  ownAppointment,
+  setFee,
+} from "./visits";
 
 const RIYA = { label: "Riya (Reception)", staffId: "s-riya" };
 const at = (hm: string) => atIst("2026-07-30", hm); // NOW's IST date
@@ -327,4 +332,94 @@ test("validateHours uses the bot's messages", () => {
     null,
   );
   expect(validateHours(DOC, "evening", null)).toBe(null); // Off is always fine
+});
+
+// ---- fee per visit ----
+test("the fee is saved on each visit at completion; a later fee change never touches old visits", async () => {
+  const s = createMemoryStore({ doctors: [{ ...DOC, standardFee: 300 }] });
+  const d300 = { ...DOC, standardFee: 300 };
+  await bookToday(
+    s,
+    d300,
+    { ...input, startsAt: at("14:30"), source: "reception" },
+    RIYA,
+    NOW,
+  );
+  await bookToday(
+    s,
+    d300,
+    {
+      ...input,
+      phone: "919111111111",
+      startsAt: at("15:00"),
+      source: "reception",
+    },
+    RIYA,
+    NOW,
+  );
+  const [a, b] = s.appointments;
+  await completeWithoutRx(s, d300, a, NOW, { actor: RIYA });
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    fee: 300,
+    completedBy: "Riya (Reception)",
+  });
+  await s.updateDoctor(DOC.id, { standardFee: 500 });
+  await completeWithoutRx(s, { ...DOC, standardFee: 500 }, b, NOW, {
+    actor: RIYA,
+  });
+  expect(s.appointments.map((x) => x.fee)).toEqual([300, 500]);
+  expect((await s.activity(DOC.id, { limit: 1 }))[0]).toMatchObject({
+    action: "completed",
+  });
+});
+
+test("a fee typed for one visit overrides the standard fee (e.g. free follow-up)", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const d = { ...DOC, standardFee: 300 };
+  await bookToday(
+    s,
+    d,
+    { ...input, startsAt: at("14:30"), source: "reception" },
+    RIYA,
+    NOW,
+  );
+  await completeWithoutRx(s, d, s.appointments[0], NOW, {
+    fee: 0,
+    actor: RIYA,
+  });
+  expect(s.appointments[0].fee).toBe(0);
+});
+
+test("setFee edits a completed visit only, never negative, and logs it", async () => {
+  const s = createMemoryStore({ doctors: [DOC] });
+  const d = { ...DOC, standardFee: 300 };
+  await bookToday(
+    s,
+    d,
+    { ...input, startsAt: at("14:30"), source: "reception" },
+    RIYA,
+    NOW,
+  );
+  const id = s.appointments[0].id;
+  expect(await setFee(s, d, id, 200, RIYA, NOW)).toEqual({
+    ok: false,
+    message: "Complete the visit first.",
+  });
+  await completeWithoutRx(s, d, s.appointments[0], NOW, { actor: RIYA });
+  expect(await setFee(s, d, id, -5, RIYA, NOW)).toEqual({
+    ok: false,
+    message: "Fee must be 0 or more.",
+  });
+  expect(await setFee(s, d, id, 200, RIYA, NOW)).toEqual({ ok: true });
+  expect(s.appointments[0].fee).toBe(200);
+  expect((await s.activity(DOC.id, { limit: 1 }))[0]).toMatchObject({
+    action: "fee_changed",
+    detail: { from: 300, to: 200 },
+  });
+  const other = { ...DOC, id: "d2" };
+  expect(await setFee(s, other, id, 100, RIYA, NOW)).toEqual({
+    ok: false,
+    message: "This visit no longer exists.",
+  });
 });

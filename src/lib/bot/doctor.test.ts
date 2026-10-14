@@ -492,6 +492,8 @@ test("a medicine with no time blocks Send; sending the corrected list replaces i
   await run(s, r("send"));
   expect(s.appointments[0]).toMatchObject({
     status: "COMPLETED",
+    fee: 0,
+    completedBy: "Dr. Mehta (WhatsApp)",
     prescriptionText: "Dolo 650 1-0-1 AF 3 days\nTent 1-0-0 BF 8 days",
   });
 });
@@ -535,6 +537,8 @@ test("mark complete with skip → COMPLETED, no PDF, 'Marked complete.'", async 
   expect(bodies(await run(s, r("skip")))).toEqual(["Marked complete."]);
   expect(s.appointments[0]).toMatchObject({
     status: "COMPLETED",
+    fee: 0,
+    completedBy: "Dr. Mehta (WhatsApp)",
     prescriptionPdfPath: null,
   });
 });

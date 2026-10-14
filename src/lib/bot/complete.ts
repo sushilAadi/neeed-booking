@@ -1,3 +1,5 @@
+import { type Actor, record } from "../clinic/activity";
+import { feeFor } from "../clinic/visits";
 import type { Appointment, Doctor, Store } from "../db/types";
 import { formatMed, type Rx } from "../rx/parse";
 import { renderPrescription, rxNo } from "../rx/pdf";
@@ -20,6 +22,7 @@ export async function completeVisit(
   a: Appointment,
   content: RxContent,
   now: Date,
+  opts: { fee?: number; actor?: Actor } = {},
 ): Promise<Send | null> {
   let prescriptionText: string | null;
   let prescriptionImagePath: string | null = null;
@@ -62,7 +65,18 @@ export async function completeVisit(
     prescriptionText,
     prescriptionImagePath,
     prescriptionPdfPath,
+    fee: feeFor(doctor, opts.fee),
+    completedBy: opts.actor?.label ?? null,
   });
+  if (opts.actor)
+    await record(
+      store,
+      doctor.id,
+      opts.actor,
+      "completed",
+      { appointmentId: a.id },
+      now,
+    );
 
   if (
     !(await windowOpen(
