@@ -49,6 +49,9 @@ export function toGraph(to: string, msg: Out): Record<string, unknown> {
         type: "interactive",
         interactive: {
           type: "button",
+          ...(msg.image
+            ? { header: { type: "image", image: { link: msg.image } } }
+            : {}),
           body: { text: cut(msg.body, 1024) },
           action: {
             buttons: msg.buttons.map((b) => ({

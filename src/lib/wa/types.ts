@@ -10,7 +10,13 @@ export type Incoming = {
 };
 export type Out =
   | { kind: "text"; body: string }
-  | { kind: "buttons"; body: string; buttons: { id: string; title: string }[] }
+  | {
+      kind: "buttons";
+      body: string;
+      buttons: { id: string; title: string }[];
+      /** Public PNG/JPG URL shown above the body. */
+      image?: string;
+    }
   | {
       kind: "list";
       body: string;

@@ -92,3 +92,17 @@ test("toGraph link button (cta_url)", () => {
     },
   });
 });
+
+test("toGraph puts a buttons message's image in the header", () => {
+  expect(
+    toGraph("91", {
+      kind: "buttons",
+      body: "b",
+      image: "https://x.test/a.png",
+      buttons: [{ id: "y", title: "Yes" }],
+    }).interactive,
+  ).toMatchObject({
+    type: "button",
+    header: { type: "image", image: { link: "https://x.test/a.png" } },
+  });
+});

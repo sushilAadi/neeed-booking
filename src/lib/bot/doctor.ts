@@ -124,8 +124,10 @@ async function step(c: BotCtx, conv: Conversation): Promise<Reply[]> {
           appointmentId: conv.ctx.appointmentId,
           patient: conv.ctx.patient,
         });
-        return [RX_PROMPT];
+        return [rxPrompt()];
       }
+      if (c.msg.type === "text" && c.msg.text?.trim() && i !== "send")
+        return rxTyped(c, conv, c.msg.text); // corrected list replaces the old one
       if (i === "send" && rxReady(rxCtx(conv))) {
         const x = rxCtx(conv);
         return markDone(c, conv, { rx: { meds: x.meds, advice: x.advice } });
@@ -619,27 +621,23 @@ async function blockApply(
   ];
 }
 
-const RX_INTRO = "*Or type it here* — one medicine per line:";
-const RX_KEY = [
-  "*Time* = Morning-Afternoon-Night _(1 = take, 0 = skip)_",
-  "*AF* = After Food · *BF* = Before Food",
-  "*Days* = how many days _(5d = 5 days)_",
+// The table and its key are in the picture (src/app/rx-guide.png) — no text alignment to break.
+const RX_EXAMPLE = "Augmentin 625 1-0-1 AF 5d";
+const RX_TEXT = [
+  "*Or type it here* — one medicine per line, like the picture.",
+  "Example:",
+  RX_EXAMPLE,
   "",
   "_You can also send a photo, or tap Skip._",
 ];
-const RX_PROMPT = skipPrompt(
-  [
-    RX_INTRO,
-    "```",
-    "Medicine       Time   Food  Days",
-    "─────────────────────────────────",
-    "Augmentin 625  1-0-1  AF    5d",
-    "Pan 40         1-0-0  BF    7d",
-    "Advice: drink water",
-    "```",
-    ...RX_KEY,
-  ].join("\n"),
-);
+const rxPrompt = (): Out => ({
+  kind: "buttons",
+  image: `${appUrl()}/rx-guide.png`,
+  body: RX_TEXT.join("\n"),
+  buttons: [{ id: "skip", title: "Skip" }, BACK],
+});
+const RX_FIX =
+  "✏️ _Mistake? Send the corrected list again: long-press your message → Copy → fix it → send._";
 
 /** Where the prescription page lives (Vercel sets the production host). */
 export const appUrl = () =>
@@ -674,7 +672,7 @@ async function markStart(
     appointmentId: id,
     patient: a.patientName,
   });
-  return [rxLink(c, a), RX_PROMPT];
+  return [rxLink(c, a), rxPrompt()];
 }
 
 async function markDone(
@@ -910,17 +908,13 @@ function rxSummary(x: RxState): Out {
   if (!rxReady(x))
     return {
       kind: "buttons",
-      body: `${head}\n\n❌ *Every medicine needs a time* like 1-0-1. Tap Start over and type it again.`,
-      buttons: [{ id: "restart", title: "Start over" }, BACK],
+      body: `${head}\n\n❌ *Every medicine needs a time* like 1-0-1.\n${RX_FIX}`,
+      buttons: [BACK],
     };
   return {
     kind: "buttons",
-    body: head,
-    buttons: [
-      { id: "send", title: "Send to patient" },
-      { id: "restart", title: "Start over" },
-      BACK,
-    ],
+    body: `${head}\n\n${RX_FIX}`,
+    buttons: [{ id: "send", title: "Send to patient" }, BACK],
   };
 }
 
@@ -930,14 +924,16 @@ async function rxTyped(
   text: string,
 ): Promise<Reply[]> {
   // Long-press copy takes the whole prompt; drop its instruction lines, keep the example rows.
-  const skip = new Set([RX_INTRO, ...RX_KEY].map((l) => l.trim()));
+  const skip = new Set(
+    RX_TEXT.filter((l) => l !== RX_EXAMPLE).map((l) => l.trim()),
+  );
   const parsed = parseRx(
     text
       .split("\n")
       .filter((l) => !skip.has(l.trim()))
       .join("\n"),
   );
-  if (!parsed.meds.length) return [RX_PROMPT];
+  if (!parsed.meds.length) return [rxPrompt()];
   const x = { ...rxCtx(conv), meds: parsed.meds, advice: parsed.advice };
   await saveState(c.store, conv, "rx_confirm", x);
   return [rxSummary(x)];

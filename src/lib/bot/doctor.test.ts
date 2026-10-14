@@ -329,20 +329,14 @@ test("block clashing with today's booking → warning; cn cancels + notifies; ke
 
 // ---- Task 9: mark complete ----
 const RX_NAMES_Q = [
-  "*Or type it here* — one medicine per line:",
-  "```",
-  "Medicine       Time   Food  Days",
-  "─────────────────────────────────",
-  "Augmentin 625  1-0-1  AF    5d",
-  "Pan 40         1-0-0  BF    7d",
-  "Advice: drink water",
-  "```",
-  "*Time* = Morning-Afternoon-Night _(1 = take, 0 = skip)_",
-  "*AF* = After Food · *BF* = Before Food",
-  "*Days* = how many days _(5d = 5 days)_",
+  "*Or type it here* — one medicine per line, like the picture.",
+  "Example:",
+  "Augmentin 625 1-0-1 AF 5d",
   "",
   "_You can also send a photo, or tap Skip._",
 ].join("\n");
+const RX_FIX =
+  "✏️ _Mistake? Send the corrected list again: long-press your message → Copy → fix it → send._";
 const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
   const a = await book(s, "919111", "14:30", "15:00");
   if (patientWindowOpen) await s.touchInbound("DOCPN", "919111", NOW);
@@ -351,6 +345,10 @@ const complete = async (s: MemoryStore, patientWindowOpen: boolean) => {
     "Write the prescription for Raj (2:30 PM–3:00 PM). Tap the button, fill it in and tap Send.",
     RX_NAMES_Q,
   ]);
+  expect(prompt[1].msg).toMatchObject({
+    kind: "buttons",
+    image: "http://localhost:3000/rx-guide.png",
+  });
   expect(prompt[0].msg).toMatchObject({
     kind: "link",
     button: "Write prescription",
@@ -381,9 +379,9 @@ test("typed prescription → check screen in words → Send: PDF stored and sent
     ),
   );
   expect(bodies(confirm)[0]).toBe(
-    "*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan D 40mg* — 2 Morning, 2 Night · Before food · 21 days\n\n*Advice:* Drink plenty of water",
+    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan D 40mg* — 2 Morning, 2 Night · Before food · 21 days\n\n*Advice:* Drink plenty of water\n\n${RX_FIX}`,
   );
-  expect(ids(confirm[0])).toEqual(["send", "restart", "back"]);
+  expect(ids(confirm[0])).toEqual(["send", "back"]);
   const out = await run(s, r("send"));
   expect(out.find((x) => x.msg.kind === "document")).toMatchObject({
     from: "DOCPN",
@@ -398,37 +396,45 @@ test("typed prescription → check screen in words → Send: PDF stored and sent
   });
 });
 
-test("copying the whole prompt reads only the example rows", async () => {
+test("copying the whole prompt reads only the example row", async () => {
   const s = await sigStore();
   await complete(s, true);
   const confirm = await run(s, t(RX_NAMES_Q));
   expect(bodies(confirm)[0]).toBe(
-    "*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n2. *Pan 40* — Morning · Before food · 7 days\n\n*Advice:* drink water",
+    `*Check the prescription for Raj:*\n\n1. *Augmentin 625* — Morning, Night · After food · 5 days\n\n${RX_FIX}`,
   );
 });
 
-test("a medicine with no time blocks Send; missing food or days only warns", async () => {
+test("a medicine with no time blocks Send; sending the corrected list replaces it", async () => {
   const s = await sigStore();
   await complete(s, true);
-  const bad = await run(s, t("Dolo 650 AF 3d\nPan 40 1-0-0"));
+  const bad = await run(s, t("Dolo 650 AF 3d\nTent 1-0-0"));
   expect(bodies(bad)[0]).toBe(
-    "*Check the prescription for Raj:*\n\n1. *Dolo 650* — After food · 3 days\n   ⚠️ _No time found_\n2. *Pan 40* — Morning\n   ⚠️ _No food, days found_\n\n❌ *Every medicine needs a time* like 1-0-1. Tap Start over and type it again.",
+    `*Check the prescription for Raj:*\n\n1. *Dolo 650* — After food · 3 days\n   ⚠️ _No time found_\n2. *Tent* — Morning\n   ⚠️ _No food, days found_\n\n❌ *Every medicine needs a time* like 1-0-1.\n${RX_FIX}`,
   );
-  expect(ids(bad[0])).toEqual(["restart", "back"]);
+  expect(ids(bad[0])).toEqual(["back"]);
   await run(s, r("send")); // a stale Send tap does nothing
   expect(s.appointments[0].status).toBe("CONFIRMED");
-  await run(s, r("restart"));
-  const ok = await run(s, t("Pan 40 1-0-0"));
-  expect(ids(ok[0])).toEqual(["send", "restart", "back"]);
+  // edit: the doctor resends the fixed list straight from the check screen
+  const ok = await run(s, t("Dolo 650 1-0-1 AF 3d\nTent 1-0-0 BF 8d"));
+  expect(bodies(ok)[0]).toBe(
+    `*Check the prescription for Raj:*\n\n1. *Dolo 650* — Morning, Night · After food · 3 days\n2. *Tent* — Morning · Before food · 8 days\n\n${RX_FIX}`,
+  );
+  expect(ids(ok[0])).toEqual(["send", "back"]);
+  await run(s, r("send"));
+  expect(s.appointments[0]).toMatchObject({
+    status: "COMPLETED",
+    prescriptionText: "Dolo 650 1-0-1 AF 3 days\nTent 1-0-0 BF 8 days",
+  });
 });
 
-test("typed prescription: Back and Start over return to the typing prompt, nothing saved", async () => {
+test("typed prescription: Back (tap or type) returns to the typing prompt, nothing saved", async () => {
   const s = await sigStore();
   await complete(s, true);
   await run(s, t("Dolo 650 1-0-1 AF 3d"));
   expect(bodies(await run(s, r("back")))).toEqual([RX_NAMES_Q]);
   await run(s, t("Dolo 650 1-0-1 AF 3d"));
-  expect(bodies(await run(s, r("restart")))).toEqual([RX_NAMES_Q]);
+  expect(bodies(await run(s, t("back")))).toEqual([RX_NAMES_Q]);
   expect(s.appointments[0].status).toBe("CONFIRMED");
 });
 
