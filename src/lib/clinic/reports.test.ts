@@ -146,3 +146,16 @@ test("totals for today, this week and this month", () => {
   expect(m.fresh).toBe(1);
   expect(m.returning).toBe(3);
 });
+
+test("totals for one picked day", () => {
+  const appts = [
+    visit("2026-10-09", { fee: 500 }),
+    visit("2026-10-09", { status: "CANCELLED", fee: null }),
+    visit("2026-10-08", { fee: 100 }),
+  ];
+  expect(periodSummary(appts, NOW, { day: "2026-10-09" })).toMatchObject({
+    collection: 500,
+    done: 1,
+    cancelled: 1,
+  });
+});

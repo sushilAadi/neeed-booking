@@ -87,10 +87,15 @@ export type Reports = ReturnType<typeof buildReports>;
 export type PeriodKey = "today" | "week" | "month";
 
 /** Totals for the Reports period pills; week = the last 7 IST days including today. */
-export function periodSummary(appts: Appointment[], now: Date, p: PeriodKey) {
+export function periodSummary(
+  appts: Appointment[],
+  now: Date,
+  p: PeriodKey | { day: string },
+) {
   const today = istDate(now);
   const inP = (a: Appointment) => {
     const d = istDate(a.startsAt);
+    if (typeof p === "object") return d === p.day;
     if (p === "today") return d === today;
     if (p === "week") return d >= addDays(today, -6) && d <= today;
     return d.slice(0, 7) === today.slice(0, 7) && d <= today;

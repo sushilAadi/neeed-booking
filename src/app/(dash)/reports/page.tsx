@@ -2,9 +2,11 @@ import { Rise } from "cube-motion/react";
 import { Ban, CheckCircle2, Clock, IndianRupee } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DatePicker } from "@/components/date-picker";
 import { PageHead } from "@/components/page-head";
 import { Ring } from "@/components/ring";
 import { requirePermission } from "@/lib/auth/guard";
+import { today } from "@/lib/bot/ctx";
 import {
   buildReports,
   type PeriodKey,
@@ -90,7 +92,10 @@ const PERIODS = [
 export default async function ReportsPage({
   searchParams,
 }: PageProps<"/reports">) {
-  const { who, p: rawP, view } = await searchParams;
+  const { who, p: rawP, view, d: rawD } = await searchParams;
+  // A picked calendar day overrides the period pills.
+  const day =
+    typeof rawD === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawD) ? rawD : "";
   const full = view === "activity";
   const p: PeriodKey = PERIODS.some(([k]) => k === rawP)
     ? (rawP as PeriodKey)
@@ -102,7 +107,7 @@ export default async function ReportsPage({
     store.activity(doctor.id, { limit: 200, staffId }),
   ]);
   const r = buildReports(appts, now);
-  const s = periodSummary(appts, now, p);
+  const s = periodSummary(appts, now, day ? { day } : p);
   const byId = new Map(appts.map((a) => [a.id, a]));
   const rows: ActivityRow[] = activity.map((a) => {
     const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
@@ -158,17 +163,20 @@ export default async function ReportsPage({
   return (
     <div className="grid gap-5">
       <PageHead eyebrow="How the clinic is doing" title="Reports">
-        <nav aria-label="Period" className="flex flex-wrap gap-2">
+        <nav aria-label="Period" className="flex flex-wrap items-center gap-2">
           {PERIODS.map(([k, label]) => (
             <Link
               key={k}
               href={q({ p: k })}
               className="pill"
-              aria-current={p === k ? "page" : undefined}
+              aria-current={!day && p === k ? "page" : undefined}
             >
               {label}
             </Link>
           ))}
+          <form action="/reports">
+            <DatePicker name="d" value={day} max={today(now).date} />
+          </form>
         </nav>
       </PageHead>
 
@@ -223,7 +231,7 @@ export default async function ReportsPage({
       <Rise
         targets="children"
         delay={120}
-        className="grid gap-4 lg:grid-cols-3 lg:items-start"
+        className="grid gap-4 lg:grid-cols-3"
       >
         <section
           aria-labelledby="status-h"
@@ -232,10 +240,20 @@ export default async function ReportsPage({
           <h2 id="status-h" className="display text-[20px] font-medium">
             Visits
           </h2>
-          <Ring waiting={s.waiting} done={s.done} cancelled={s.cancelled} />
+          <div className="grid flex-1 place-items-center">
+            <Ring
+              waiting={s.waiting}
+              done={s.done}
+              cancelled={s.cancelled}
+              large
+            />
+          </div>
         </section>
 
-        <section aria-labelledby="money-h" className="card card-pad grid gap-2">
+        <section
+          aria-labelledby="money-h"
+          className="card card-pad flex flex-col gap-2"
+        >
           <div>
             <h2 id="money-h" className="display text-[20px] font-medium">
               Collection
@@ -244,7 +262,7 @@ export default async function ReportsPage({
               This month {rupees(r.month.collection)} · last 12 months
             </p>
           </div>
-          <div className="h-44">
+          <div className="min-h-44 flex-1">
             <CollectionLine data={r.collectionByMonth} />
           </div>
         </section>

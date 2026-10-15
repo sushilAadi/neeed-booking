@@ -1,5 +1,10 @@
 /** Status donut (waiting / done / cancelled) with a legend. */
-export function Ring(p: { waiting: number; done: number; cancelled: number }) {
+export function Ring(p: {
+  waiting: number;
+  done: number;
+  cancelled: number;
+  large?: boolean;
+}) {
   const total = p.waiting + p.done + p.cancelled;
   const parts = [
     { label: "Waiting", n: p.waiting, color: "var(--wait-fill)" },
@@ -13,7 +18,7 @@ export function Ring(p: { waiting: number; done: number; cancelled: number }) {
     <div className="flex items-center gap-5">
       <svg
         viewBox="0 0 100 100"
-        className="size-28 shrink-0 -rotate-90"
+        className={`${p.large ? "size-44" : "size-28"} shrink-0 -rotate-90`}
         role="img"
         aria-label={`${p.done} done, ${p.waiting} waiting, ${p.cancelled} cancelled`}
       >
@@ -45,7 +50,7 @@ export function Ring(p: { waiting: number; done: number; cancelled: number }) {
             return el;
           })}
       </svg>
-      <ul className="grid gap-2 text-sm">
+      <ul className={`grid gap-2 ${p.large ? "text-base" : "text-sm"}`}>
         {parts.map((x) => (
           <li key={x.label} className="flex items-center gap-2">
             <span
