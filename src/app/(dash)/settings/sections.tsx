@@ -139,7 +139,10 @@ export function Hours(p: { initial: HoursForm }) {
         <legend className="mb-1 text-sm font-semibold">Time per patient</legend>
         <div className="grid grid-cols-4 gap-2">
           {[15, 30, 45, 60].map((m) => (
-            <label key={m} className="chip cursor-pointer px-1 whitespace-nowrap">
+            <label
+              key={m}
+              className="chip cursor-pointer px-1 whitespace-nowrap"
+            >
               <input
                 type="radio"
                 name="slot"
