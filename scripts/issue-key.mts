@@ -1,7 +1,12 @@
 // Create or re-key a dashboard login and print the key ONCE.
 // node --env-file=.env.local scripts/issue-key.mts --doctor <doctorId> [--role doctor|reception] [--name "Riya"]
 import { createClient } from "@supabase/supabase-js";
-import { generateKey, hashKey, normalizeKey } from "../src/lib/auth/keys.ts";
+import {
+  generateKey,
+  hashKey,
+  normalizeKey,
+  sealKey,
+} from "../src/lib/auth/keys.ts";
 
 const arg = (k: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -27,6 +32,7 @@ const { data: doc, error: dErr } = await db
 if (dErr || !doc) throw new Error(`No doctor ${doctorId}`);
 const key = generateKey(role);
 const keyHash = hashKey(normalizeKey(key) as string, pepper);
+const keyEnc = sealKey(key, pepper);
 const name = arg("name") ?? (role === "doctor" ? doc.name : "Reception");
 const { data: existing } = await db
   .from("staff")
@@ -39,15 +45,20 @@ if (role === "doctor" && existing) {
     .from("staff")
     .update({
       key_hash: keyHash,
+      key_enc: keyEnc,
       key_version: existing.key_version + 1,
       active: true,
     })
     .eq("id", existing.id);
   if (error) throw new Error(error.message);
 } else {
-  const { error } = await db
-    .from("staff")
-    .insert({ doctor_id: doctorId, role, name, key_hash: keyHash });
+  const { error } = await db.from("staff").insert({
+    doctor_id: doctorId,
+    role,
+    name,
+    key_hash: keyHash,
+    key_enc: keyEnc,
+  });
   if (error) throw new Error(error.message);
 }
 console.log(

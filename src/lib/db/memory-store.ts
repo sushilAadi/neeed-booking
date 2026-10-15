@@ -23,7 +23,7 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
   const convs = new Map<string, Conversation>();
   const processed = new Set<string>();
   const files = new Map<string, Uint8Array>();
-  const staff: (Staff & { keyHash: string })[] = [];
+  const staff: (Staff & { keyHash: string; keyEnc?: string })[] = [];
   const acts: Activity[] = [];
   const fails: { ip: string; at: Date }[] = [];
   const accessRequests: (AccessRequest & { at: Date })[] = [];
@@ -31,7 +31,11 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
   const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
   const key = (a: string, b: string) => `${a}|${b}`;
 
-  const pub = ({ keyHash: _, ...s }: Staff & { keyHash: string }): Staff => ({
+  const pub = ({
+    keyHash: _,
+    keyEnc: __,
+    ...s
+  }: Staff & { keyHash: string; keyEnc?: string }): Staff => ({
     ...s,
   });
 
@@ -202,6 +206,9 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
       };
       staff.push(s);
       return pub(s);
+    },
+    async staffKeyEnc(sid) {
+      return staff.find((x) => x.id === sid)?.keyEnc ?? null;
     },
     async updateStaff(sid, patch) {
       const s = staff.find((x) => x.id === sid);

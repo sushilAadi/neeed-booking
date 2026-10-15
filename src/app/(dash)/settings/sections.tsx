@@ -1,8 +1,16 @@
 "use client";
 
 import { Morph, Rise } from "cube-motion/react";
-import { Copy, Download, KeyRound, UserMinus, UserPlus } from "lucide-react";
-import { useState, useTransition } from "react";
+import {
+  Copy,
+  Download,
+  Eye,
+  EyeOff,
+  KeyRound,
+  UserMinus,
+  UserPlus,
+} from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { Sheet } from "@/components/sheet";
 import type { ClashMode, HoursForm, HoursKey } from "@/lib/clinic/availability";
 import type { Period, Range } from "@/lib/slots";
@@ -13,6 +21,7 @@ import {
   newKeyAction,
   type Result,
   removeStaffAction,
+  revealKeyAction,
   saveFeeAction,
   saveHoursAction,
   saveRxSetupAction,
@@ -482,6 +491,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
                 {s.role === "doctor" ? "Doctor" : "Reception"} · added {s.added}{" "}
                 · last active {s.lastActive}
               </p>
+              <KeyView id={s.id} />
             </div>
             <div className="flex gap-2">
               <button
@@ -633,5 +643,74 @@ export function StaffList(p: { me: string; people: Person[] }) {
       </Sheet>
       {toastEl}
     </Section>
+  );
+}
+
+const SHOW_SECONDS = 30;
+
+/** A login key, hidden by default; the eye shows it for 30 seconds with a countdown. */
+function KeyView({ id }: { id: string }) {
+  const [key, setKey] = useState<string | null>(null);
+  const [left, setLeft] = useState(0);
+  const [missing, setMissing] = useState(false);
+  const [busy, start] = useTransition();
+  useEffect(() => {
+    if (!key) return;
+    if (left <= 0) {
+      setKey(null);
+      return;
+    }
+    const t = setTimeout(() => setLeft((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [key, left]);
+  const show = () =>
+    start(async () => {
+      const k = await revealKeyAction(id);
+      setMissing(!k);
+      if (k) {
+        setKey(k);
+        setLeft(SHOW_SECONDS);
+      }
+    });
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span
+        className="inner px-3 py-2 font-mono text-[14px] tracking-wider select-all"
+        aria-live="polite"
+      >
+        {key ?? "••-••••-••••-••••"}
+      </span>
+      <button
+        type="button"
+        className="btn-icon"
+        disabled={busy}
+        aria-label={key ? "Hide key" : "Show key"}
+        onClick={() => (key ? setKey(null) : show())}
+      >
+        {key ? (
+          <EyeOff size={18} strokeWidth={1.75} aria-hidden />
+        ) : (
+          <Eye size={18} strokeWidth={1.75} aria-hidden />
+        )}
+      </button>
+      {key && (
+        <>
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label="Copy key"
+            onClick={() => navigator.clipboard.writeText(key)}
+          >
+            <Copy size={16} strokeWidth={1.75} aria-hidden />
+          </button>
+          <span className="text-[13px] text-muted">Hides in {left}s</span>
+        </>
+      )}
+      {missing && !key && (
+        <span className="text-[13px] text-muted">
+          Made before keys could be viewed. Tap New key to see it here.
+        </span>
+      )}
+    </div>
   );
 }

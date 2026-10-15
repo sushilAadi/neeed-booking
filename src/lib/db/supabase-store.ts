@@ -99,6 +99,7 @@ const toActivity = (r: Row): Activity => ({
 
 const STAFF_COLS: Record<string, string> = {
   keyHash: "key_hash",
+  keyEnc: "key_enc",
   keyVersion: "key_version",
   active: "active",
   lastActiveAt: "last_active_at",
@@ -398,12 +399,19 @@ export function createSupabaseStore(): Store {
             role: n.role,
             name: n.name,
             key_hash: n.keyHash,
+            key_enc: n.keyEnc ?? null,
           })
           .select("*")
           .single(),
       );
       if (!r) throw new Error("staff insert returned no row");
       return toStaff(r);
+    },
+    async staffKeyEnc(id) {
+      const r = must(
+        await db.from("staff").select("key_enc").eq("id", id).maybeSingle(),
+      );
+      return (r?.key_enc as string | null) ?? null;
     },
     async updateStaff(id, patch) {
       const row: Row = {};

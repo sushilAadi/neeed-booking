@@ -1,10 +1,14 @@
-import { generateKey, hashKey, normalizeKey } from "../auth/keys";
+import { generateKey, hashKey, normalizeKey, sealKey } from "../auth/keys";
 import type { Doctor, Role, Staff, Store } from "../db/types";
 import { type Actor, record } from "./activity";
 
 const newKey = (role: Role, pepper: string) => {
   const key = generateKey(role);
-  return { key, keyHash: hashKey(normalizeKey(key) as string, pepper) };
+  return {
+    key,
+    keyHash: hashKey(normalizeKey(key) as string, pepper),
+    keyEnc: sealKey(key, pepper),
+  };
 };
 
 /** This clinic's active staff member, or throw (never touch another clinic's rows). */
@@ -30,12 +34,13 @@ export async function addReceptionist(
 ): Promise<{ staff: Staff; key: string }> {
   const clean = name.trim().slice(0, 40);
   if (!clean) throw new Error("Type a name.");
-  const { key, keyHash } = newKey("reception", pepper);
+  const { key, keyHash, keyEnc } = newKey("reception", pepper);
   const staff = await store.createStaff({
     doctorId: doctor.id,
     role: "reception",
     name: clean,
     keyHash,
+    keyEnc,
   });
   await record(
     store,
@@ -79,8 +84,12 @@ export async function reissueKey(
   pepper: string,
 ): Promise<string> {
   const s = await ownStaff(store, doctor, staffId);
-  const { key, keyHash } = newKey(s.role, pepper);
-  await store.updateStaff(s.id, { keyHash, keyVersion: s.keyVersion + 1 });
+  const { key, keyHash, keyEnc } = newKey(s.role, pepper);
+  await store.updateStaff(s.id, {
+    keyHash,
+    keyEnc,
+    keyVersion: s.keyVersion + 1,
+  });
   await record(
     store,
     doctor.id,

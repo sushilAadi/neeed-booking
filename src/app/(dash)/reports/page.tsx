@@ -191,9 +191,16 @@ export default async function ReportsPage({
           aria-labelledby="act-h"
           className="card card-pad flex min-h-0 flex-col gap-3 lg:col-start-3 lg:row-span-2 lg:row-start-1"
         >
-          <h2 id="act-h" className="display text-[20px] font-medium">
-            Activity
-          </h2>
+          <div>
+            <h2 id="act-h" className="display text-[20px] font-medium">
+              Activity
+            </h2>
+            <p className="text-[13px] text-muted">
+              Who did what in your clinic, newest first: bookings, completed
+              visits, fee changes, closing days and staff changes. Tap a person
+              to see only theirs.
+            </p>
+          </div>
           <nav
             aria-label="Filter activity by person"
             className="flex flex-wrap gap-2"

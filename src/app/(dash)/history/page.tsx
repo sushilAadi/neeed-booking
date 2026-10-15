@@ -52,8 +52,11 @@ export default async function HistoryPage({
   const n = Math.min(Math.max(Number(one("n")) || STEP, STEP), 500);
   const { store, doctor, now } = await requireStaff();
   const t = today(now);
-  const from =
-    p === "week"
+  // A picked calendar day overrides the period pills.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(one("d")) ? one("d") : "";
+  const from = d
+    ? atIst(d, "00:00")
+    : p === "week"
       ? atIst(addDays(t.date, -6), "00:00")
       : p === "month"
         ? atIst(`${t.date.slice(0, 8)}01`, "00:00")
@@ -62,7 +65,7 @@ export default async function HistoryPage({
     store,
     doctor.id,
     q,
-    { from, to: t.to },
+    { from, to: d ? atIst(addDays(d, 1), "00:00") : t.to },
     { limit: n },
   );
   const selId = one("v");
@@ -73,7 +76,7 @@ export default async function HistoryPage({
       )
     : [];
   const href = (o: Record<string, string>) =>
-    `/history?${new URLSearchParams({ ...(q ? { q } : {}), p, ...o }).toString()}`;
+    `/history?${new URLSearchParams({ ...(q ? { q } : {}), ...(d ? { d } : { p }), ...o }).toString()}`;
 
   return (
     <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_minmax(0,1fr)]">
@@ -84,7 +87,7 @@ export default async function HistoryPage({
               key={k}
               href={`/history?${new URLSearchParams({ ...(q ? { q } : {}), p: k })}`}
               className="pill"
-              aria-current={p === k ? "page" : undefined}
+              aria-current={!d && p === k ? "page" : undefined}
             >
               {label}
             </Link>
@@ -98,9 +101,9 @@ export default async function HistoryPage({
           className="card card-pad flex min-h-0 flex-col gap-4"
         >
           <search>
-            <form action="/history" className="flex gap-2">
-              <input type="hidden" name="p" value={p} />
-              <label className="relative flex-1">
+            <form action="/history" className="flex flex-wrap gap-2">
+              {!d && <input type="hidden" name="p" value={p} />}
+              <label className="relative min-w-48 flex-1">
                 <span className="sr-only">Search by phone number or name</span>
                 <Search
                   size={18}
@@ -115,6 +118,16 @@ export default async function HistoryPage({
                   className="field pl-11"
                 />
               </label>
+              <label className="shrink-0">
+                <span className="sr-only">Visits on date</span>
+                <input
+                  type="date"
+                  name="d"
+                  defaultValue={d}
+                  max={t.date}
+                  className="field w-[160px] px-3"
+                />
+              </label>
               <button type="submit" className="btn btn-primary">
                 Search
               </button>
@@ -124,6 +137,7 @@ export default async function HistoryPage({
             {visits.length}
             {more ? "+" : ""} visit{visits.length === 1 ? "" : "s"}
             {q ? ` matching “${q}”` : ""}
+            {d ? ` on ${fmtDate(atIst(d, "12:00"))}` : ""}
           </h2>
           {!visits.length ? (
             <p className="grid flex-1 place-items-center p-8 text-center text-sm text-muted">

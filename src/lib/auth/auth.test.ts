@@ -125,3 +125,14 @@ test("actorLabel: the doctor's stored name, or name (Reception)", async () => {
   expect(actorLabel(doctor, DOC)).toBe("Dr. Mehta");
   expect(actorLabel(riya, DOC)).toBe("Riya (Reception)");
 });
+
+test("sealKey/openKey round-trip; wrong pepper or tampering gives null", async () => {
+  const { sealKey, openKey } = await import("./keys");
+  const k = generateKey("reception");
+  const blob = sealKey(k, "pepper");
+  expect(blob).not.toContain(k);
+  expect(openKey(blob, "pepper")).toBe(k);
+  expect(openKey(blob, "other")).toBe(null);
+  expect(openKey(`${blob.slice(0, -2)}AA`, "pepper")).toBe(null);
+  expect(openKey("junk", "pepper")).toBe(null);
+});

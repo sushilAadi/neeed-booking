@@ -109,3 +109,23 @@ test("reissueKey: only that person's old sessions end; new key works", async () 
     (await reissueKey(s, DOC, doc.id, ME, NOW, "pepper")).startsWith("DR-"),
   ).toBe(true);
 });
+
+test("keys can be viewed later by the doctor: add and reissue store a sealed copy", async () => {
+  const { openKey } = await import("../auth/keys");
+  const { s } = await setup();
+  const { staff, key } = await addReceptionist(
+    s,
+    DOC,
+    "Riya",
+    ME,
+    NOW,
+    "pepper",
+  );
+  expect(openKey((await s.staffKeyEnc(staff.id)) as string, "pepper")).toBe(
+    key,
+  );
+  const fresh = await reissueKey(s, DOC, staff.id, ME, NOW, "pepper");
+  expect(openKey((await s.staffKeyEnc(staff.id)) as string, "pepper")).toBe(
+    fresh,
+  );
+});

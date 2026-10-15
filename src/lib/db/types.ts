@@ -185,11 +185,15 @@ export interface Store {
     role: Role;
     name: string;
     keyHash: string;
+    keyEnc?: string;
   }): Promise<Staff>;
+  /** Sealed copy of the person's current key (see sealKey), or null for older keys. */
+  staffKeyEnc(id: string): Promise<string | null>;
   updateStaff(
     id: string,
     patch: Partial<{
       keyHash: string;
+      keyEnc: string;
       keyVersion: number;
       active: boolean;
       lastActiveAt: Date;

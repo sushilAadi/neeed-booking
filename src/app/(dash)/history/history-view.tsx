@@ -4,7 +4,7 @@ import { Rise } from "cube-motion/react";
 import { CalendarPlus, FileText, Phone, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Sheet } from "@/components/sheet";
 import type { Gender, Source, Status } from "@/lib/db/types";
 import { rxUrlAction } from "./actions";
@@ -42,6 +42,15 @@ export function PatientPanel(p: {
 }) {
   const router = useRouter();
   const v = p.visits[0];
+  // The sheet is for phones only: a modal <dialog> inside a hidden wrapper still makes the page inert.
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(max-width: 1023px)");
+    setPhone(m.matches);
+    const on = () => setPhone(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
   const body = v ? <Body visits={p.visits} /> : null;
   return (
     <>
@@ -60,7 +69,7 @@ export function PatientPanel(p: {
       </aside>
       <div className="lg:hidden">
         <Sheet
-          open={!!v}
+          open={phone && !!v}
           onClose={() => router.push(p.closeHref, { scroll: false })}
           title={v?.name ?? "Patient"}
         >

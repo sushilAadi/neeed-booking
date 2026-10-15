@@ -26,10 +26,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f3f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1116" },
-  ],
+  themeColor: "#f5f3f1",
 };
 
 export default function RootLayout({
@@ -38,6 +35,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // Light by default; the dark tokens stay for a later theme switch.
+      data-theme="light"
       className={`${body.variable} ${heading.variable} h-full antialiased`}
       // Browser extensions (ColorZilla, security add-ons…) add attributes here before React loads.
       suppressHydrationWarning

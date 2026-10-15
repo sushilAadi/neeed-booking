@@ -31,6 +31,9 @@ export default async function DashLayout({
               <p className="truncate text-[13px] text-muted">{fmtDay(now)}</p>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
+              <span className="badge badge-done py-2 sm:hidden">
+                {staff.role === "doctor" ? "Doctor" : "Reception"}
+              </span>
               <span
                 className={`badge ${closed ? "badge-cancel" : "badge-money"} py-2`}
               >
@@ -46,7 +49,8 @@ export default async function DashLayout({
                 <span className="leading-tight">
                   <span className="block text-[14px] font-semibold">{who}</span>
                   <span className="block text-[12px] text-muted">
-                    {staff.role === "doctor" ? "Doctor" : "Reception"}
+                    Logged in as{" "}
+                    {staff.role === "doctor" ? "doctor" : "receptionist"}
                   </span>
                 </span>
               </div>

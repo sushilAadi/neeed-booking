@@ -99,7 +99,10 @@ export function TodayView(p: {
   const [period, setPeriod] = useState<Card["group"] | "all">("all");
   const listed = shown.filter((c) => period === "all" || c.group === period);
   const next = p.cards.find((c) => c.status === "CONFIRMED");
-  const periods = GROUPS.filter(([g]) => p.cards.some((c) => c.group === g));
+  // Morning, afternoon and evening always show; "Other times" only when used.
+  const periods = GROUPS.filter(
+    ([g]) => g !== "other" || p.cards.some((c) => c.group === g),
+  );
 
   return (
     <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
@@ -175,7 +178,7 @@ export function TodayView(p: {
                 {p.stats.waiting} waiting · {p.cards.length} total
               </span>
             </h2>
-            {periods.length > 1 && (
+            {p.cards.length > 0 && (
               <fieldset className="flex flex-wrap gap-2">
                 <legend className="sr-only">Part of day</legend>
                 {[["all", "All"] as const, ...periods].map(([g, t]) => (

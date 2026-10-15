@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { requireDoctorRole, requireStaff } from "@/lib/auth/guard";
+import { openKey } from "@/lib/auth/keys";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -224,4 +225,13 @@ export async function newKeyAction(id: string): Promise<KeyResult> {
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
+}
+
+/** Shows a staff member's key to the doctor; null for keys made before keys were viewable. */
+export async function revealKeyAction(id: string): Promise<string | null> {
+  const s = await requireDoctorRole();
+  const who = await s.store.staffById(id);
+  if (!who || who.doctorId !== s.doctor.id || !who.active) return null;
+  const enc = await s.store.staffKeyEnc(id);
+  return enc ? openKey(enc, pepper()) : null;
 }
