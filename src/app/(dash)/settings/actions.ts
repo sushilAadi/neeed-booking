@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { requireDoctorRole, requireStaff } from "@/lib/auth/guard";
+import { requireDoctorRole, requirePermission } from "@/lib/auth/guard";
 import { openKey } from "@/lib/auth/keys";
+import { setPermissions } from "@/lib/auth/permissions";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -40,7 +41,7 @@ export async function saveHoursAction(
   | { ok: true; message: string }
   | { ok: false; errors: Partial<Record<HoursKey, string>> }
 > {
-  const s = await requireStaff();
+  const s = await requirePermission("hours");
   const form = { slotMinutes: Number(f.slotMinutes) } as HoursForm;
   for (const k of [...PERIODS, "lunch"] as const) form[k] = range(f[k]);
   const r = await saveHours(s.store, s.doctor, form, s.actor, s.now);
@@ -72,7 +73,7 @@ export async function blockAction(
   what: "whole" | Period | Range,
   mode: ClashMode,
 ): Promise<Result> {
-  const s = await requireStaff();
+  const s = await requirePermission("close");
   const first = today(s.now).date;
   const days = Array.from({ length: 7 }, (_, i) => addDays(first, i));
   if (!days.includes(date)) return { ok: false, message: "Pick a day." };
@@ -282,4 +283,19 @@ export async function saveLogoAction(form: FormData): Promise<Result> {
   );
   revalidatePath("/", "layout");
   return { ok: true, message: "Logo saved." };
+}
+
+/** The doctor ticks what a receptionist may do. */
+export async function setAccessAction(
+  id: string,
+  perms: string[],
+): Promise<Result> {
+  const s = await requireDoctorRole();
+  try {
+    await setPermissions(s.store, s.doctor, id, perms, s.actor, s.now);
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "Access saved. It applies on their next click." };
 }

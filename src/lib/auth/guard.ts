@@ -4,6 +4,7 @@ import type { Actor } from "../clinic/activity";
 import { createSupabaseStore } from "../db/supabase-store";
 import type { Doctor, Staff, Store } from "../db/types";
 import { actorLabel, currentStaff } from "./login";
+import { can, type Perm } from "./permissions";
 import { SESSION_COOKIE } from "./session";
 
 export type Session = {
@@ -38,5 +39,12 @@ export async function requireStaff(): Promise<Session> {
 export async function requireDoctorRole(): Promise<Session> {
   const s = await requireStaff();
   if (s.staff.role !== "doctor") redirect("/today");
+  return s;
+}
+
+/** A receptionist without this box ticked is sent back to Today (pages and actions alike). */
+export async function requirePermission(p: Perm): Promise<Session> {
+  const s = await requireStaff();
+  if (!can(s.staff, p)) redirect("/today");
   return s;
 }

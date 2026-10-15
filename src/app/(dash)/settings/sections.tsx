@@ -8,12 +8,15 @@ import {
   EyeOff,
   KeyRound,
   Lock,
+  ShieldCheck,
   UserMinus,
   UserPlus,
 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 import { DataTable } from "@/components/data-table";
+import { Drawer } from "@/components/drawer";
 import { Sheet } from "@/components/sheet";
+import { PERMS } from "@/lib/auth/permissions";
 import type { ClashMode, HoursForm, HoursKey } from "@/lib/clinic/availability";
 import type { Period, Range } from "@/lib/slots";
 import {
@@ -29,6 +32,7 @@ import {
   saveHoursAction,
   saveLogoAction,
   saveRxSetupAction,
+  setAccessAction,
 } from "./actions";
 
 /** Shared: run an action in a transition and show its message as a toast. */
@@ -465,6 +469,7 @@ type Person = {
   role: "doctor" | "reception";
   added: string;
   lastActive: string;
+  permissions: string[];
 };
 
 export function StaffList(p: { me: string; people: Person[] }) {
@@ -474,6 +479,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
     null,
   );
   const [removing, setRemoving] = useState<Person | null>(null);
+  const [accessFor, setAccessFor] = useState<Person | null>(null);
   const [error, setError] = useState("");
   const { busy, start, say, toastEl } = useRun();
 
@@ -542,6 +548,16 @@ export function StaffList(p: { me: string; people: Person[] }) {
             className: "text-right",
             render: (x) => (
               <span className="inline-flex gap-2">
+                {x.role !== "doctor" && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setAccessFor(x)}
+                  >
+                    <ShieldCheck size={16} strokeWidth={1.75} aria-hidden />{" "}
+                    Access
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-icon"
@@ -669,6 +685,15 @@ export function StaffList(p: { me: string; people: Person[] }) {
         </button>
       </Sheet>
 
+      <AccessPanel
+        key={accessFor?.id ?? "none"}
+        person={accessFor}
+        onClose={() => setAccessFor(null)}
+        onSaved={(m) => {
+          setAccessFor(null);
+          say(m);
+        }}
+      />
       <Sheet
         open={!!removing}
         onClose={() => setRemoving(null)}
@@ -907,5 +932,83 @@ export function ClinicDetails(p: {
       </button>
       {toastEl}
     </Section>
+  );
+}
+
+/** The doctor's checkboxes for one receptionist, with what each box allows. */
+function AccessPanel(p: {
+  person: Person | null;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [perms, setPerms] = useState<string[]>(p.person?.permissions ?? []);
+  const [err, setErr] = useState("");
+  const [busy, start] = useTransition();
+  const toggle = (k: string) =>
+    setPerms((x) => (x.includes(k) ? x.filter((y) => y !== k) : [...x, k]));
+  return (
+    <Drawer
+      open={!!p.person}
+      onClose={p.onClose}
+      title={`What ${p.person?.name ?? ""} can do`}
+    >
+      <div className="grid gap-4">
+        <p className="text-sm text-muted">
+          Tick what this receptionist may see and do. Pages and buttons they
+          don't have are hidden from them, and the server refuses them too.
+          Standard fee, prescription setup, clinic details and staff are always
+          doctor only.
+        </p>
+        <ul className="grid gap-2">
+          <li className="inner flex items-start gap-3 p-4 opacity-70">
+            <input
+              type="checkbox"
+              checked
+              disabled
+              className="mt-1 size-5 accent-[var(--accent)]"
+              aria-label="Today's queue (always on)"
+            />
+            <span>
+              <span className="block font-semibold">Today's queue</span>
+              <span className="block text-sm text-muted">
+                See today's patients. Always on.
+              </span>
+            </span>
+          </li>
+          {PERMS.map(([k, label, hint]) => (
+            <li key={k}>
+              <label className="inner flex cursor-pointer items-start gap-3 p-4 hover:bg-sunk">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-5 accent-[var(--accent)]"
+                  checked={perms.includes(k)}
+                  onChange={() => toggle(k)}
+                />
+                <span>
+                  <span className="block font-semibold">{label}</span>
+                  <span className="block text-sm text-muted">{hint}</span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        <Err id="access-err" text={err} />
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={() =>
+            p.person &&
+            start(async () => {
+              const r = await setAccessAction((p.person as Person).id, perms);
+              if (r.ok) p.onSaved(r.message);
+              else setErr(r.message);
+            })
+          }
+        >
+          {busy ? "Saving…" : "Save access"}
+        </button>
+      </div>
+    </Drawer>
   );
 }

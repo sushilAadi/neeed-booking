@@ -11,20 +11,26 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
-  { href: "/today", label: "Today", Icon: CalendarDays },
-  { href: "/add", label: "Add patient", Icon: UserPlus },
-  { href: "/history", label: "History", Icon: History },
-  { href: "/reports", label: "Reports", Icon: BarChart3 },
-  { href: "/settings", label: "Settings", Icon: Settings },
+const ALL_TABS = [
+  { href: "/today", label: "Today", Icon: CalendarDays, perm: null },
+  { href: "/add", label: "Add patient", Icon: UserPlus, perm: "add" },
+  { href: "/history", label: "History", Icon: History, perm: "history" },
+  { href: "/reports", label: "Reports", Icon: BarChart3, perm: "reports" },
+  { href: "/settings", label: "Settings", Icon: Settings, perm: null },
 ] as const;
 
 const on = (path: string, href: string) =>
   path === href || path.startsWith(`${href}/`);
 
 /** Round icon rail from 768 px; frosted bottom tab bar on phones. */
-export function Nav(p: { logoUrl: string | null; clinic: string }) {
+export function Nav(p: {
+  logoUrl: string | null;
+  clinic: string;
+  /** Pages this person may open (doctor: all). */
+  allowed: string[];
+}) {
   const path = usePathname();
+  const TABS = ALL_TABS.filter((t) => !t.perm || p.allowed.includes(t.perm));
   return (
     <>
       <nav
@@ -84,7 +90,12 @@ export function Nav(p: { logoUrl: string | null; clinic: string }) {
         className="glass fixed inset-x-3 bottom-3 z-30 rounded-[28px] border shadow-[var(--shadow-lift)] md:hidden"
         style={{ marginBottom: "env(safe-area-inset-bottom)" }}
       >
-        <ul className="grid grid-cols-5">
+        <ul
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))`,
+          }}
+        >
           {TABS.map(({ href, label, Icon }) => {
             const active = on(path, href);
             return (

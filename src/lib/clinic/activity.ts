@@ -23,7 +23,8 @@ export type Action =
   | "staff_added"
   | "staff_removed"
   | "key_reissued"
-  | "clinic_changed";
+  | "clinic_changed"
+  | "access_changed";
 
 export function record(
   store: Store,

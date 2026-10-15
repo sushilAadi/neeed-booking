@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DatePicker } from "@/components/date-picker";
 import { PageHead } from "@/components/page-head";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
 import { searchVisits } from "@/lib/clinic/history";
 import type { Appointment } from "@/lib/db/types";
@@ -51,7 +51,7 @@ export default async function HistoryPage({
     ? (one("p") as Period)
     : "month";
   const n = Math.min(Math.max(Number(one("n")) || STEP, STEP), 500);
-  const { store, doctor, now } = await requireStaff();
+  const { store, doctor, now } = await requirePermission("history");
   const t = today(now);
   // A picked calendar day overrides the period pills.
   const d = /^\d{4}-\d{2}-\d{2}$/.test(one("d")) ? one("d") : "";

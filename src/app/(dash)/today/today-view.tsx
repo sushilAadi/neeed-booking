@@ -56,6 +56,8 @@ type Pending =
   | null;
 
 export function TodayView(p: {
+  /** What this person may do (doctor: everything). */
+  perms: string[];
   cards: Card[];
   closed: boolean;
   standardFee: number;
@@ -66,6 +68,7 @@ export function TodayView(p: {
     collection: number;
   };
 }) {
+  const allow = (x: string) => p.perms.includes(x);
   const [pending, setPending] = useState<Pending>(null);
   const [toast, setToast] = useState("");
   const [busy, start] = useTransition();
@@ -95,27 +98,31 @@ export function TodayView(p: {
   return (
     <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
       <PageHead eyebrow="Your clinic desk for today" title="Today">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!p.closed}
-          disabled={busy}
-          onClick={() => run(() => setClosedAction(!p.closed, null))}
-          className="btn btn-ghost btn-sm gap-3"
-        >
-          <Morph active={p.closed} off="Taking bookings" on="Closed today" />
-          <span
-            aria-hidden
-            className={`relative h-6 w-10 rounded-full transition-colors ${p.closed ? "bg-sunk" : "bg-accent"}`}
+        {allow("close") && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!p.closed}
+            disabled={busy}
+            onClick={() => run(() => setClosedAction(!p.closed, null))}
+            className="btn btn-ghost btn-sm gap-3"
           >
+            <Morph active={p.closed} off="Taking bookings" on="Closed today" />
             <span
-              className={`absolute top-1 left-1 size-4 rounded-full bg-surface shadow transition-transform ${p.closed ? "" : "translate-x-4"}`}
-            />
-          </span>
-        </button>
-        <Link href="/add" className="btn btn-primary btn-sm">
-          <UserPlus size={18} strokeWidth={1.75} aria-hidden /> Add patient
-        </Link>
+              aria-hidden
+              className={`relative h-6 w-10 rounded-full transition-colors ${p.closed ? "bg-sunk" : "bg-accent"}`}
+            >
+              <span
+                className={`absolute top-1 left-1 size-4 rounded-full bg-surface shadow transition-transform ${p.closed ? "" : "translate-x-4"}`}
+              />
+            </span>
+          </button>
+        )}
+        {allow("add") && (
+          <Link href="/add" className="btn btn-primary btn-sm">
+            <UserPlus size={18} strokeWidth={1.75} aria-hidden /> Add patient
+          </Link>
+        )}
       </PageHead>
 
       <Rise
@@ -201,6 +208,7 @@ export function TodayView(p: {
               columns={queueColumns(
                 (c) => setPending({ kind: "cancel", card: c }),
                 (c) => setPending({ kind: "fee", card: c }),
+                allow,
               )}
             />
           )}
@@ -230,10 +238,12 @@ export function TodayView(p: {
                     </p>
                   </div>
                 </div>
-                <Link href={`/visit/${next.id}`} className="btn btn-primary">
-                  <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden /> Mark
-                  complete
-                </Link>
+                {allow("complete") && (
+                  <Link href={`/visit/${next.id}`} className="btn btn-primary">
+                    <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden />{" "}
+                    Mark complete
+                  </Link>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted">Nobody waiting right now.</p>
@@ -358,6 +368,7 @@ const STATUS_TEXT = {
 function queueColumns(
   onCancel: (c: Card) => void,
   onFee: (c: Card) => void,
+  allow: (p: string) => boolean,
 ): Column<Card>[] {
   return [
     {
@@ -428,24 +439,28 @@ function queueColumns(
       render: (c) =>
         c.status === "CONFIRMED" ? (
           <span className="inline-flex gap-2">
-            <Link
-              href={`/visit/${c.id}`}
-              className="btn-icon bg-accent text-accent-ink"
-              aria-label={`Mark ${c.name}'s visit complete`}
-              title="Mark complete"
-            >
-              <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden />
-            </Link>
-            <button
-              type="button"
-              onClick={() => onCancel(c)}
-              className="btn-icon"
-              aria-label={`Cancel ${c.name}'s visit`}
-            >
-              <Ban size={18} strokeWidth={1.75} aria-hidden />
-            </button>
+            {allow("complete") && (
+              <Link
+                href={`/visit/${c.id}`}
+                className="btn-icon bg-accent text-accent-ink"
+                aria-label={`Mark ${c.name}'s visit complete`}
+                title="Mark complete"
+              >
+                <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden />
+              </Link>
+            )}
+            {allow("cancel") && (
+              <button
+                type="button"
+                onClick={() => onCancel(c)}
+                className="btn-icon"
+                aria-label={`Cancel ${c.name}'s visit`}
+              >
+                <Ban size={18} strokeWidth={1.75} aria-hidden />
+              </button>
+            )}
           </span>
-        ) : c.status === "COMPLETED" ? (
+        ) : c.status === "COMPLETED" && allow("fee") ? (
           <button
             type="button"
             onClick={() => onFee(c)}
@@ -455,6 +470,8 @@ function queueColumns(
             {c.fee === null ? "Add fee" : rupees(c.fee)}
             <IndianRupee size={14} aria-hidden />
           </button>
+        ) : c.status === "COMPLETED" && c.fee !== null ? (
+          rupees(c.fee)
         ) : null,
     },
   ];

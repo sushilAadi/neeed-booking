@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { ownAppointment } from "@/lib/clinic/visits";
 import { parseRx } from "@/lib/rx/parse";
 import { fmtDay, fmtRange } from "@/lib/time";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Mark complete" };
 
 export default async function VisitPage({ params }: PageProps<"/visit/[id]">) {
   const { id } = await params;
-  const { store, doctor } = await requireStaff();
+  const { store, doctor } = await requirePermission("complete");
   const a = await ownAppointment(store, doctor.id, id);
   if (!a) notFound();
   if (a.status !== "CONFIRMED") redirect("/today");

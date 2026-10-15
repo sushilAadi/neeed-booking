@@ -203,6 +203,7 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
         active: true,
         createdAt: new Date(seq),
         lastActiveAt: null,
+        permissions: ["add", "cancel", "history"],
       };
       staff.push(s);
       return pub(s);

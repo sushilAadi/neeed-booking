@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { bookToday, freeToday, validatePatient } from "@/lib/clinic/booking";
 import { lastPatientDetails, normalizePhone } from "@/lib/clinic/patient";
 import { byPeriod } from "@/lib/slots";
@@ -29,7 +29,7 @@ const TITLES = {
 
 /** Today's free times, grouped like WhatsApp. */
 export async function freeSlotGroups(): Promise<SlotGroups> {
-  const { store, doctor, now } = await requireStaff();
+  const { store, doctor, now } = await requirePermission("add");
   const by = byPeriod(doctor, await freeToday(store, doctor, now));
   return (Object.keys(TITLES) as (keyof typeof TITLES)[])
     .filter((p) => by[p].length)
@@ -43,7 +43,7 @@ export async function freeSlotGroups(): Promise<SlotGroups> {
 }
 
 export async function lookupPatient(phone: string) {
-  const { store, doctor } = await requireStaff();
+  const { store, doctor } = await requirePermission("add");
   const p = normalizePhone(phone);
   return p ? lastPatientDetails(store, doctor.id, p) : null;
 }
@@ -51,7 +51,7 @@ export async function lookupPatient(phone: string) {
 export async function addPatient(
   raw: Record<string, string>,
 ): Promise<AddResult> {
-  const s = await requireStaff();
+  const s = await requirePermission("add");
   const v = validatePatient(raw);
   const startsAt = new Date(raw.slot ?? "");
   if (!v.ok || Number.isNaN(+startsAt))

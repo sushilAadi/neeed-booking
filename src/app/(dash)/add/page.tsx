@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHead } from "@/components/page-head";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
 import { fmtPhone, fmtTime } from "@/lib/time";
 import { freeSlotGroups } from "./actions";
@@ -14,7 +14,7 @@ export default async function AddPage({
   searchParams: Promise<{ phone?: string | string[] }>;
 }) {
   const { phone } = await searchParams;
-  const { store, doctor, now } = await requireStaff();
+  const { store, doctor, now } = await requirePermission("add");
   const t = today(now);
   const booked: Booked[] = (
     await store.appointmentsBetween(doctor.id, t.from, t.to)

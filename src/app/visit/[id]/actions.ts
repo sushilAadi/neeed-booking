@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import { previewVisit } from "@/lib/bot/complete";
 import { ownAppointment } from "@/lib/clinic/visits";
 import { cleanRxPayload } from "@/lib/rx/link";
@@ -13,7 +13,7 @@ export async function submitVisit(
   id: string,
   payload: unknown,
 ): Promise<Result> {
-  const s = await requireStaff();
+  const s = await requirePermission("complete");
   const a = await ownAppointment(s.store, s.doctor.id, id);
   if (!a) return { ok: false, message: "This visit no longer exists." };
   const r = await submitRxFor(s.store, s.doctor, a, payload, s.now, {
@@ -29,7 +29,7 @@ export async function previewVisitPdf(
   id: string,
   payload: unknown,
 ): Promise<Result> {
-  const s = await requireStaff();
+  const s = await requirePermission("complete");
   const a = await ownAppointment(s.store, s.doctor.id, id);
   if (!a) return { ok: false, message: "This visit no longer exists." };
   if (!s.doctor.signaturePath)

@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHead } from "@/components/page-head";
 import { requireStaff } from "@/lib/auth/guard";
+import { can } from "@/lib/auth/permissions";
 import { today } from "@/lib/bot/ctx";
 import { PERIODS, periodHours } from "@/lib/slots";
 import { addDays, atIst, fmtDate, fmtPhone } from "@/lib/time";
@@ -64,26 +65,30 @@ export default async function Page() {
             logoUrl={logoUrl}
           />
         )}
-        <Hours
-          initial={{
-            morning: periodHours(doctor, "morning"),
-            afternoon: periodHours(doctor, "afternoon"),
-            evening: periodHours(doctor, "evening"),
-            lunch:
-              doctor.lunchStart && doctor.lunchEnd
-                ? { start: doctor.lunchStart, end: doctor.lunchEnd }
-                : null,
-            slotMinutes: doctor.slotMinutes,
-          }}
-        />
+        {can(staff, "hours") && (
+          <Hours
+            initial={{
+              morning: periodHours(doctor, "morning"),
+              afternoon: periodHours(doctor, "afternoon"),
+              evening: periodHours(doctor, "evening"),
+              lunch:
+                doctor.lunchStart && doctor.lunchEnd
+                  ? { start: doctor.lunchStart, end: doctor.lunchEnd }
+                  : null,
+              slotMinutes: doctor.slotMinutes,
+            }}
+          />
+        )}
         <div
           className={`grid gap-4 lg:items-start ${isDoctor ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" : ""}`}
         >
           {isDoctor && <Fee initial={doctor.standardFee} />}
-          <BlockTime
-            days={days}
-            off={PERIODS.filter((p) => !periodHours(doctor, p))}
-          />
+          {can(staff, "close") && (
+            <BlockTime
+              days={days}
+              off={PERIODS.filter((p) => !periodHours(doctor, p))}
+            />
+          )}
         </div>
         {isDoctor && (
           <>
@@ -96,6 +101,7 @@ export default async function Page() {
                   id: p.id,
                   name: p.role === "doctor" ? `${doctor.name} (you)` : p.name,
                   role: p.role,
+                  permissions: p.permissions,
                   added: fmtDate(p.createdAt),
                   lastActive: p.lastActiveAt
                     ? fmtDate(p.lastActiveAt)

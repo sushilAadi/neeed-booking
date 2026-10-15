@@ -88,6 +88,7 @@ const toStaff = (r: Row): Staff => ({
   active: r.active,
   createdAt: new Date(r.created_at),
   lastActiveAt: r.last_active_at ? new Date(r.last_active_at) : null,
+  permissions: (r.permissions as string[] | null) ?? [],
 });
 
 const toActivity = (r: Row): Activity => ({
@@ -104,6 +105,7 @@ const toActivity = (r: Row): Activity => ({
 const STAFF_COLS: Record<string, string> = {
   keyHash: "key_hash",
   keyEnc: "key_enc",
+  permissions: "permissions",
   keyVersion: "key_version",
   active: "active",
   lastActiveAt: "last_active_at",

@@ -89,6 +89,8 @@ export type Staff = {
   active: boolean;
   createdAt: Date;
   lastActiveAt: Date | null;
+  /** Receptionist access (see lib/auth/permissions); ignored for the doctor. */
+  permissions: string[];
 };
 export type Activity = {
   id: string;
@@ -207,6 +209,7 @@ export interface Store {
       keyHash: string;
       keyEnc: string;
       keyVersion: number;
+      permissions: string[];
       active: boolean;
       lastActiveAt: Date;
     }>,

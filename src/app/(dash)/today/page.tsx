@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth/guard";
+import { can, PERMS } from "@/lib/auth/permissions";
 import { today } from "@/lib/bot/ctx";
 import { periodOf } from "@/lib/slots";
 import { fmtTime } from "@/lib/time";
@@ -8,7 +9,7 @@ import { type Card, TodayView } from "./today-view";
 export const metadata: Metadata = { title: "Today" };
 
 export default async function TodayPage() {
-  const { store, doctor, now } = await requireStaff();
+  const { store, doctor, staff, now } = await requireStaff();
   const t = today(now);
   const [appts, closed] = await Promise.all([
     store.appointmentsBetween(doctor.id, t.from, t.to),
@@ -34,6 +35,7 @@ export default async function TodayPage() {
   const done = cards.filter((c) => c.status === "COMPLETED");
   return (
     <TodayView
+      perms={PERMS.map(([k]) => k).filter((k) => can(staff, k))}
       cards={cards}
       closed={closed}
       standardFee={doctor.standardFee}

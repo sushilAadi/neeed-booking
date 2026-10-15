@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHead } from "@/components/page-head";
 import { Ring } from "@/components/ring";
-import { requireStaff } from "@/lib/auth/guard";
+import { requirePermission } from "@/lib/auth/guard";
 import {
   buildReports,
   type PeriodKey,
@@ -34,6 +34,7 @@ const KIND: Record<string, [string, string]> = {
   staff_removed: ["Staff", "badge-cancel"],
   key_reissued: ["Staff", "badge-done"],
   clinic_changed: ["Settings", "badge-done"],
+  access_changed: ["Staff", "badge-done"],
 };
 
 /** One plain sentence per activity row. */
@@ -69,6 +70,8 @@ function describe(a: Activity, appts: Map<string, Appointment>): string {
       return `Added ${d.name ?? "a receptionist"}`;
     case "staff_removed":
       return `Removed ${d.name ?? "a receptionist"}`;
+    case "access_changed":
+      return `Changed what ${d.name ?? "a receptionist"} can do`;
     case "clinic_changed":
       return "Changed the clinic name, doctor name or address";
     case "key_reissued":
@@ -92,7 +95,7 @@ export default async function ReportsPage({
   const p: PeriodKey = PERIODS.some(([k]) => k === rawP)
     ? (rawP as PeriodKey)
     : "month";
-  const { store, doctor, now } = await requireStaff();
+  const { store, doctor, now } = await requirePermission("reports");
   const staffId = typeof who === "string" ? who : undefined;
   const [appts, activity] = await Promise.all([
     store.appointmentsBetween(doctor.id, new Date(0), new Date(+now + 864e5)),
