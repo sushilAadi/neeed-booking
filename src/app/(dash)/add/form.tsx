@@ -300,6 +300,14 @@ export function AddForm({
         ) : (
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Already booked today</caption>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Patient</th>
+                <th scope="col">Phone</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-[var(--line)]">
               {bookings.map((b) => (
                 <tr key={b.id}>
