@@ -23,9 +23,9 @@
   --wait: #9a4309;
   --wait-soft: #fdeee2;
   --wait-fill: #f08a3c;
-  --done: #1d5fc2;
-  --done-soft: #e5effd;
-  --done-fill: #3b82f6;
+  --done: #17734a;
+  --done-soft: #e2f4e9;
+  --done-fill: #22a06b;
   --ok: #18794e;
   --ok-soft: #e3f4ea;
   --danger: #c0262d;
@@ -60,9 +60,9 @@
     --wait: #f6a86b;
     --wait-soft: #35231a;
     --wait-fill: #f08a3c;
-    --done: #8ab8ff;
-    --done-soft: #182a45;
-    --done-fill: #4f8ff7;
+    --done: #6fd7a0;
+    --done-soft: #15301f;
+    --done-fill: #2fbf7f;
     --ok: #6fd7a0;
     --ok-soft: #15301f;
     --danger: #ff8d8f;

@@ -5,6 +5,7 @@ import { CalendarPlus, FileText, Phone, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { type Column, DataTable } from "@/components/data-table";
 import { Sheet } from "@/components/sheet";
 import type { Gender, Source, Status } from "@/lib/db/types";
 import { rxUrlAction } from "./actions";
@@ -45,7 +46,7 @@ export function PatientPanel(p: {
   // The sheet is for phones only: a modal <dialog> inside a hidden wrapper still makes the page inert.
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const m = window.matchMedia("(max-width: 1023px)");
+    const m = window.matchMedia("(max-width: 1279px)");
     setPhone(m.matches);
     const on = () => setPhone(m.matches);
     m.addEventListener("change", on);
@@ -56,7 +57,7 @@ export function PatientPanel(p: {
     <>
       <aside
         aria-label="Patient"
-        className="card card-pad hidden min-h-0 flex-col gap-4 lg:flex"
+        className="card card-pad hidden min-h-0 flex-col gap-4 xl:flex"
       >
         {body ?? (
           <div className="grid flex-1 place-items-center gap-3 text-center text-muted">
@@ -67,7 +68,7 @@ export function PatientPanel(p: {
           </div>
         )}
       </aside>
-      <div className="lg:hidden">
+      <div className="xl:hidden">
         <Sheet
           open={phone && !!v}
           onClose={() => router.push(p.closeHref, { scroll: false })}
@@ -124,31 +125,14 @@ function Body({ visits }: { visits: Visit[] }) {
           <Phone size={16} strokeWidth={1.75} aria-hidden /> {v.phoneText}
         </a>
       </div>
-      <ol className="scroll-area grid content-start gap-2 lg:flex-1">
-        {visits.map((x) => (
-          <li key={x.id} className="inner grid gap-1 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="font-semibold">
-                {x.date} · {x.time}
-              </p>
-              <span className={`badge ${STATUS[x.status][1]}`}>
-                {STATUS[x.status][0]}
-              </span>
-            </div>
-            <p className="text-[13px] text-muted">
-              {[
-                x.reason,
-                x.fee !== null ? `₹${x.fee.toLocaleString("en-IN")}` : null,
-                x.completedBy ? `by ${x.completedBy}` : null,
-                x.source === "whatsapp" ? "WhatsApp" : "Reception",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-            {x.hasRx && <RxButton id={x.id} />}
-          </li>
-        ))}
-      </ol>
+      <DataTable
+        label="This patient's visits"
+        minWidth={420}
+        rows={visits}
+        columns={VISITS}
+        rowKey={(x) => x.id}
+        className="lg:flex-1"
+      />
     </Rise>
   );
 }
@@ -168,7 +152,106 @@ function RxButton({ id }: { id: string }) {
       }
     >
       <FileText size={16} strokeWidth={1.75} aria-hidden />
-      {busy ? "Opening…" : "View prescription PDF"}
+      {busy ? "Opening…" : "View PDF"}
     </button>
   );
 }
+
+const statusBadge = (x: Visit) => (
+  <span className={`badge ${STATUS[x.status][1]}`}>{STATUS[x.status][0]}</span>
+);
+const fee = (x: Visit) =>
+  x.fee === null ? "" : `₹${x.fee.toLocaleString("en-IN")}`;
+
+const LIST: Column<Visit>[] = [
+  {
+    key: "name",
+    label: "Patient",
+    text: (x) => x.name,
+    filter: "text",
+    className: "whitespace-nowrap",
+  },
+  {
+    key: "date",
+    label: "Date",
+    text: (x) => x.date,
+    filter: "text",
+    className: "whitespace-nowrap",
+  },
+  {
+    key: "time",
+    label: "Time",
+    text: (x) => x.time,
+    className: "whitespace-nowrap",
+  },
+  {
+    key: "phone",
+    label: "Phone",
+    text: (x) => x.phoneText,
+    filter: "text",
+    className: "whitespace-nowrap",
+  },
+  {
+    key: "status",
+    label: "Status",
+    text: (x) => STATUS[x.status][0],
+    render: statusBadge,
+    filter: "select",
+  },
+  { key: "fee", label: "Fee", text: fee, className: "whitespace-nowrap" },
+  {
+    key: "src",
+    label: "Booked via",
+    text: (x) => (x.source === "whatsapp" ? "WhatsApp" : "Reception"),
+    filter: "select",
+  },
+];
+
+/** History's visit list: a compact filterable table; the patient name opens their panel. */
+export function VisitTable(p: {
+  rows: Visit[];
+  selectedId: string | null;
+  base: string;
+}) {
+  return (
+    <DataTable
+      label="Visits"
+      rows={p.rows}
+      columns={LIST}
+      rowKey={(x) => x.id}
+      selected={p.selectedId}
+      href={(x) => `${p.base}&v=${x.id}`}
+      className="lg:flex-1"
+    />
+  );
+}
+
+const VISITS: Column<Visit>[] = [
+  {
+    key: "date",
+    label: "Date",
+    text: (x) => `${x.date} · ${x.time}`,
+    filter: "text",
+    className: "whitespace-nowrap",
+  },
+  {
+    key: "reason",
+    label: "Reason",
+    text: (x) => x.reason ?? "",
+    filter: "text",
+  },
+  {
+    key: "status",
+    label: "Status",
+    text: (x) => STATUS[x.status][0],
+    render: statusBadge,
+    filter: "select",
+  },
+  { key: "fee", label: "Fee", text: fee },
+  {
+    key: "rx",
+    label: "Prescription",
+    text: (x) => (x.hasRx ? "PDF" : ""),
+    render: (x) => (x.hasRx ? <RxButton id={x.id} /> : null),
+  },
+];

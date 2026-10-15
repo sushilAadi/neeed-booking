@@ -6,13 +6,13 @@ import {
   CheckCircle2,
   Clock,
   IndianRupee,
-  Phone,
   Search,
   Stethoscope,
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { type Column, DataTable } from "@/components/data-table";
 import { PageHead } from "@/components/page-head";
 import { Ring } from "@/components/ring";
 import { Sheet } from "@/components/sheet";
@@ -220,21 +220,16 @@ export function TodayView(p: {
               </p>
             </div>
           ) : (
-            <ol className="scroll-area -mx-2 grid content-start gap-2 px-2 lg:flex-1">
-              {listed.map((c) => (
-                <Row
-                  key={c.id}
-                  c={c}
-                  onCancel={() => setPending({ kind: "cancel", card: c })}
-                  onFee={() => setPending({ kind: "fee", card: c })}
-                />
-              ))}
-              {!listed.length && (
-                <li className="p-6 text-center text-sm text-muted">
-                  No patient matches “{q}”.
-                </li>
+            <DataTable
+              label="Today's queue"
+              rows={listed}
+              rowKey={(c) => c.id}
+              className="lg:flex-1"
+              columns={queueColumns(
+                (c) => setPending({ kind: "cancel", card: c }),
+                (c) => setPending({ kind: "fee", card: c }),
               )}
-            </ol>
+            />
           )}
         </section>
 
@@ -381,77 +376,108 @@ function Stat(p: {
   );
 }
 
-function Row(p: { c: Card; onCancel: () => void; onFee: () => void }) {
-  const { c } = p;
-  const done = c.status === "COMPLETED";
-  const off = c.status === "CANCELLED";
-  return (
-    <li className="inner lift grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 p-3 sm:grid-cols-[72px_minmax(0,1fr)_auto]">
-      <div className="text-center">
-        <p className="display text-[18px] leading-tight font-medium">
-          {c.time.replace(/ (AM|PM)$/, "")}
-        </p>
-        <p className="text-[12px] font-semibold text-muted">
-          {c.time.slice(-2)}
-        </p>
-      </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <p
-            className={`truncate font-semibold ${off ? "text-muted line-through" : ""}`}
+const STATUS_TEXT = {
+  CONFIRMED: "Waiting",
+  COMPLETED: "Done",
+  CANCELLED: "Cancelled",
+} as const;
+
+function queueColumns(
+  onCancel: (c: Card) => void,
+  onFee: (c: Card) => void,
+): Column<Card>[] {
+  return [
+    {
+      key: "time",
+      label: "Time",
+      text: (c) => c.time,
+      className: "whitespace-nowrap font-semibold",
+    },
+    {
+      key: "name",
+      label: "Patient",
+      text: (c) => c.name,
+      filter: "text",
+      render: (c) => (
+        <span className="block min-w-0">
+          <span
+            className={`block font-semibold ${c.status === "CANCELLED" ? "text-muted line-through" : ""}`}
           >
             {c.name}
-          </p>
-          <StatusBadge status={c.status} />
-        </div>
-        <p className="truncate text-[13px] text-muted">
-          {[facts(c), c.reason].filter(Boolean).join(" · ") || "No details"}
-        </p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[13px] text-muted">
-          <a
-            href={`tel:+${c.phone}`}
-            className="inline-flex min-h-8 items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline"
-          >
-            <Phone size={14} aria-hidden /> {phoneText(c.phone)}
-          </a>
-          <span>{c.source === "whatsapp" ? "WhatsApp" : "Reception"}</span>
-          {done && c.completedBy ? (
-            <span>Completed by {c.completedBy}</span>
-          ) : c.createdBy && c.source === "reception" ? (
-            <span>Added by {c.createdBy}</span>
-          ) : null}
-        </p>
-      </div>
-      <div className="col-span-2 flex justify-end gap-2 sm:col-span-1">
-        {c.status === "CONFIRMED" && (
-          <>
+          </span>
+          <span className="block text-[12px] text-muted">
+            {facts(c) || "—"}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "phone",
+      label: "Phone",
+      text: (c) => phoneText(c.phone),
+      filter: "text",
+      className: "whitespace-nowrap",
+      render: (c) => (
+        <a
+          href={`tel:+${c.phone}`}
+          className="font-semibold underline-offset-2 hover:underline"
+        >
+          {phoneText(c.phone)}
+        </a>
+      ),
+    },
+    {
+      key: "reason",
+      label: "Reason",
+      text: (c) => c.reason ?? "",
+      filter: "text",
+    },
+    {
+      key: "src",
+      label: "Booked via",
+      text: (c) => (c.source === "whatsapp" ? "WhatsApp" : "Reception"),
+      filter: "select",
+    },
+    {
+      key: "status",
+      label: "Status",
+      text: (c) => STATUS_TEXT[c.status],
+      filter: "select",
+      render: (c) => <StatusBadge status={c.status} />,
+    },
+    {
+      key: "act",
+      label: "Fee / action",
+      text: () => "",
+      className: "text-right whitespace-nowrap",
+      render: (c) =>
+        c.status === "CONFIRMED" ? (
+          <span className="inline-flex gap-2">
             <Link href={`/visit/${c.id}`} className="btn btn-primary btn-sm">
               <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden /> Complete
             </Link>
             <button
               type="button"
-              onClick={p.onCancel}
+              onClick={() => onCancel(c)}
               className="btn-icon"
               aria-label={`Cancel ${c.name}'s visit`}
             >
               <Ban size={18} strokeWidth={1.75} aria-hidden />
             </button>
-          </>
-        )}
-        {done && (
+          </span>
+        ) : c.status === "COMPLETED" ? (
           <button
             type="button"
-            onClick={p.onFee}
+            onClick={() => onFee(c)}
             className="btn btn-ghost btn-sm"
             aria-label={`${c.fee === null ? "Add fee" : rupees(c.fee)}, edit fee for ${c.name}`}
           >
             {c.fee === null ? "Add fee" : rupees(c.fee)}
             <IndianRupee size={14} aria-hidden />
           </button>
-        )}
-      </div>
-    </li>
-  );
+        ) : null,
+    },
+  ];
 }
 
 function StatusBadge({ status }: { status: Status }) {

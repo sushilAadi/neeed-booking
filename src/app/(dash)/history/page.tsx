@@ -7,7 +7,7 @@ import { today } from "@/lib/bot/ctx";
 import { searchVisits } from "@/lib/clinic/history";
 import type { Appointment } from "@/lib/db/types";
 import { addDays, atIst, fmtDate, fmtPhone, fmtTime } from "@/lib/time";
-import { PatientPanel, type Visit } from "./history-view";
+import { PatientPanel, type Visit, VisitTable } from "./history-view";
 
 export const metadata: Metadata = { title: "History" };
 
@@ -95,7 +95,7 @@ export default async function HistoryPage({
         </nav>
       </PageHead>
 
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
+      <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
         <section
           aria-labelledby="visits-h"
           className="card card-pad flex min-h-0 flex-col gap-4"
@@ -144,50 +144,25 @@ export default async function HistoryPage({
               No visits found. Try another number or name, or pick All.
             </p>
           ) : (
-            <ol className="scroll-area -mx-2 grid content-start gap-2 px-2 lg:flex-1">
-              {visits.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    href={href({ v: a.id, n: String(n) })}
-                    scroll={false}
-                    aria-current={a.id === selId ? "true" : undefined}
-                    className={`inner lift grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 ${a.id === selId ? "ring-2 ring-ink" : ""}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold">
-                        {a.patientName}
-                      </span>
-                      <span className="block truncate text-[13px] text-muted">
-                        {fmtDate(a.startsAt)} · {fmtTime(a.startsAt)} ·{" "}
-                        {fmtPhone(a.patientPhone)}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {a.fee !== null && (
-                        <span className="text-sm font-semibold">
-                          ₹{a.fee.toLocaleString("en-IN")}
-                        </span>
-                      )}
-                      <Badge status={a.status} />
-                    </span>
-                  </Link>
-                </li>
-              ))}
+            <>
+              <VisitTable
+                rows={visits.map(toVisit)}
+                selectedId={selId || null}
+                base={href({ n: String(n) })}
+              />
               {more && (
-                <li className="pt-2 text-center">
-                  <Link
-                    href={href({
-                      n: String(n + STEP),
-                      ...(selId ? { v: selId } : {}),
-                    })}
-                    scroll={false}
-                    className="btn btn-ghost btn-sm"
-                  >
-                    Load more
-                  </Link>
-                </li>
+                <Link
+                  href={href({
+                    n: String(n + STEP),
+                    ...(selId ? { v: selId } : {}),
+                  })}
+                  scroll={false}
+                  className="btn btn-ghost btn-sm justify-self-center"
+                >
+                  Load more
+                </Link>
               )}
-            </ol>
+            </>
           )}
         </section>
 
@@ -199,13 +174,4 @@ export default async function HistoryPage({
       </div>
     </div>
   );
-}
-
-function Badge({ status }: { status: Appointment["status"] }) {
-  const [t, c] = {
-    CONFIRMED: ["Waiting", "badge-wait"],
-    COMPLETED: ["Done", "badge-done"],
-    CANCELLED: ["Cancelled", "badge-cancel"],
-  }[status];
-  return <span className={`badge ${c}`}>{t}</span>;
 }
