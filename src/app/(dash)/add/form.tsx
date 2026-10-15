@@ -4,6 +4,7 @@ import { Morph } from "cube-motion/react";
 import { CalendarPlus, Check, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { DataTable } from "@/components/data-table";
 import {
   type AddResult,
   addPatient,
@@ -49,7 +50,10 @@ export function AddForm({
   bookings: Booked[];
 }) {
   const router = useRouter();
-  const [f, setF] = useState({ ...EMPTY, phone: initialPhone });
+  const [f, setF] = useState({
+    ...EMPTY,
+    phone: initialPhone.replace(/\D/g, "").slice(-10),
+  });
   const [booked, setBooked] = useState(false);
   const [slots, setSlots] = useState(initialSlots);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -78,7 +82,7 @@ export function AddForm({
   // "Book again" from History opens /add?phone=…
   // biome-ignore lint/correctness/useExhaustiveDependencies: run once for the initial phone
   useEffect(() => {
-    if (initialPhone) prefill(initialPhone);
+    if (initialPhone) prefill(initialPhone.replace(/\D/g, "").slice(-10));
   }, []);
 
   const submit = (e: React.FormEvent) => {
@@ -133,19 +137,31 @@ export function AddForm({
       >
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold">WhatsApp mobile no.</span>
-          <input
-            className="field"
-            type="tel"
-            inputMode="tel"
-            autoComplete="off"
-            placeholder="98765 43210"
-            aria-label="WhatsApp mobile no."
-            value={f.phone}
-            onChange={(e) => set("phone", e.target.value)}
-            onBlur={() => f.phone.trim() && prefill()}
-            aria-invalid={!!errors.phone || undefined}
-            aria-describedby="phone-help phone-err"
-          />
+          <div className="relative">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-semibold text-muted"
+            >
+              +91
+            </span>
+            <input
+              className="field pl-14 tracking-wide"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="10-digit number"
+              aria-label="WhatsApp mobile no., 10 digits"
+              maxLength={10}
+              value={f.phone}
+              onChange={(e) => {
+                const d = e.target.value.replace(/\D/g, "").slice(0, 10);
+                set("phone", d);
+                if (d.length === 10) prefill(d);
+              }}
+              aria-invalid={!!errors.phone || undefined}
+              aria-describedby="phone-help phone-err"
+            />
+          </div>
           <span id="phone-help" className="text-[13px] text-muted">
             Enter the patient's WhatsApp number. They can then download their
             prescription anytime from WhatsApp → My prescriptions.
@@ -295,43 +311,55 @@ export function AddForm({
         aria-label="Already booked today"
       >
         <p className="eyebrow">Already booked today ({bookings.length})</p>
-        {!bookings.length ? (
-          <p className="text-sm text-muted">No bookings yet today.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Already booked today</caption>
-            <thead className="sr-only">
-              <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Patient</th>
-                <th scope="col">Phone</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--line)]">
-              {bookings.map((b) => (
-                <tr key={b.id}>
-                  <td className="py-2 pr-3 font-semibold whitespace-nowrap">
-                    {b.time}
-                  </td>
-                  <td
-                    className={`py-2 pr-3 ${b.status === "CANCELLED" ? "text-muted line-through" : ""}`}
-                  >
-                    {b.name}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap text-muted">
-                    {b.phone}
-                  </td>
-                  <td className="py-2 text-right">
-                    <span className={`badge ${BADGE[b.status][1]}`}>
-                      {BADGE[b.status][0]}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          label="Already booked today"
+          rows={bookings}
+          rowKey={(b) => b.id}
+          minWidth={420}
+          className="max-h-72"
+          empty="No bookings yet today."
+          columns={[
+            {
+              key: "time",
+              label: "Time",
+              text: (b) => b.time,
+              className: "whitespace-nowrap font-semibold",
+            },
+            {
+              key: "name",
+              label: "Patient",
+              text: (b) => b.name,
+              filter: "text",
+              render: (b) => (
+                <span
+                  className={
+                    b.status === "CANCELLED" ? "text-muted line-through" : ""
+                  }
+                >
+                  {b.name}
+                </span>
+              ),
+            },
+            {
+              key: "phone",
+              label: "Phone",
+              text: (b) => b.phone,
+              filter: "text",
+              className: "whitespace-nowrap text-muted",
+            },
+            {
+              key: "status",
+              label: "Status",
+              text: (b) => BADGE[b.status][0],
+              filter: "select",
+              render: (b) => (
+                <span className={`badge ${BADGE[b.status][1]}`}>
+                  {BADGE[b.status][0]}
+                </span>
+              ),
+            },
+          ]}
+        />
       </section>
     </form>
   );

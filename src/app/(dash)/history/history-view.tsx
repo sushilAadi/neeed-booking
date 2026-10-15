@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { type Column, DataTable } from "@/components/data-table";
+import { PdfPanel } from "@/components/pdf-panel";
 import { Sheet } from "@/components/sheet";
 import type { Gender, Source, Status } from "@/lib/db/types";
 import { rxUrlAction } from "./actions";
@@ -139,21 +140,24 @@ function Body({ visits }: { visits: Visit[] }) {
 
 function RxButton({ id }: { id: string }) {
   const [busy, start] = useTransition();
+  const [url, setUrl] = useState<string | null>(null);
   return (
-    <button
-      type="button"
-      disabled={busy}
-      className="btn btn-ghost btn-sm justify-self-start"
-      onClick={() =>
-        start(async () => {
-          const url = await rxUrlAction(id);
-          if (url) window.open(url, "_blank", "noopener");
-        })
-      }
-    >
-      <FileText size={16} strokeWidth={1.75} aria-hidden />
-      {busy ? "Opening…" : "View PDF"}
-    </button>
+    <>
+      <PdfPanel url={url} title="Prescription" onClose={() => setUrl(null)} />
+      <button
+        type="button"
+        disabled={busy}
+        className="btn btn-ghost btn-sm justify-self-start"
+        onClick={() =>
+          start(async () => {
+            setUrl(await rxUrlAction(id));
+          })
+        }
+      >
+        <FileText size={16} strokeWidth={1.75} aria-hidden />
+        {busy ? "Opening…" : "View PDF"}
+      </button>
+    </>
   );
 }
 

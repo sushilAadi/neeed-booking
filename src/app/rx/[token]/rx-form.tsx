@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { PdfPanel } from "@/components/pdf-panel";
 
 type Food = "after" | "before" | "any";
 type Row = {
@@ -137,24 +138,19 @@ export function RxForm(p: {
     ...(p.fee !== undefined ? { fee: Number(fee || 0) } : {}),
   });
 
+  const [pdf, setPdf] = useState<string | null>(null);
   async function previewPdf() {
     setError("");
     if (!filled.length || !p.preview) {
       setError("Add at least one medicine name.");
       return;
     }
-    // open the tab now (a click), fill it once the PDF is ready — popup blockers allow this
-    const tab = window.open("", "_blank");
     setBusy(true);
     try {
       const r = await p.preview(payload());
-      if (r.ok && r.url && tab) tab.location.href = r.url;
-      else {
-        tab?.close();
-        setError(r.message);
-      }
+      if (r.ok && r.url) setPdf(r.url);
+      else setError(r.message);
     } catch {
-      tab?.close();
       setError("No connection. Check your internet and try again.");
     } finally {
       setBusy(false);
@@ -487,6 +483,11 @@ export function RxForm(p: {
         </div>
       </div>
 
+      <PdfPanel
+        url={pdf}
+        title={`Preview · ${p.patient}`}
+        onClose={() => setPdf(null)}
+      />
       <div className={`rx-bar ${desk ? "lg:hidden" : ""}`}>
         <div className="mx-auto flex max-w-xl items-center gap-3">
           <output className="block min-w-0 flex-1 text-[13px] leading-snug text-[var(--rx-muted)]">

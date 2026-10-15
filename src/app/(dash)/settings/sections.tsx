@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
+import { DataTable } from "@/components/data-table";
 import { Sheet } from "@/components/sheet";
 import type { ClashMode, HoursForm, HoursKey } from "@/lib/clinic/availability";
 import type { Period, Range } from "@/lib/slots";
@@ -470,7 +471,6 @@ export function StaffList(p: { me: string; people: Person[] }) {
     null,
   );
   const [removing, setRemoving] = useState<Person | null>(null);
-  const [find, setFind] = useState("");
   const [error, setError] = useState("");
   const { busy, start, say, toastEl } = useRun();
 
@@ -487,95 +487,91 @@ export function StaffList(p: { me: string; people: Person[] }) {
       title="Staff"
       hint="Each person logs in with their own key. Only you can see this."
     >
-      {p.people.length > 8 && (
-        <input
-          type="search"
-          className="field"
-          placeholder="Search staff by name"
-          aria-label="Search staff by name"
-          value={find}
-          onChange={(e) => setFind(e.target.value)}
-        />
-      )}
-      <div className="scroll-area inner max-h-[420px] overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-sunk text-[12px] text-muted">
-            <tr>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Name
-              </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Login key
-              </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Last active
-              </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Added
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-semibold">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--line)]">
-            {p.people
-              .filter((s) =>
-                s.name.toLowerCase().includes(find.trim().toLowerCase()),
-              )
-              .map((s) => (
-                <tr key={s.id} className="align-middle">
-                  <td className="px-4 py-3">
-                    <p className="font-semibold">{s.name}</p>
-                    <span
-                      className={`badge mt-1 ${s.role === "doctor" ? "badge-done" : "badge-money"}`}
-                    >
-                      {s.role === "doctor" ? "Doctor" : "Reception"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <KeyView id={s.id} />
-                  </td>
-                  <td className="px-4 py-3 text-muted">{s.lastActive}</td>
-                  <td className="px-4 py-3 text-muted">{s.added}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="btn-icon"
-                        disabled={busy}
-                        aria-label={`New key for ${s.name}`}
-                        title="New key"
-                        onClick={() =>
-                          window.confirm(
-                            s.id === p.me
-                              ? "Make a new key for you? Your other devices will be logged out."
-                              : `Make a new key for ${s.name}? Their old key stops working.`,
-                          ) &&
-                          start(async () => gotKey(await newKeyAction(s.id)))
-                        }
-                      >
-                        <KeyRound size={16} strokeWidth={1.75} aria-hidden />
-                      </button>
-                      {s.role !== "doctor" && (
-                        <button
-                          type="button"
-                          className="btn-icon text-danger"
-                          disabled={busy}
-                          aria-label={`Remove ${s.name}`}
-                          title="Remove"
-                          onClick={() => setRemoving(s)}
-                        >
-                          <UserMinus size={16} strokeWidth={1.75} aria-hidden />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        label="Staff"
+        rows={p.people}
+        rowKey={(x) => x.id}
+        minWidth={680}
+        className="max-h-[420px]"
+        columns={[
+          {
+            key: "name",
+            label: "Name",
+            text: (x) => x.name,
+            filter: "text",
+            className: "whitespace-nowrap font-semibold",
+          },
+          {
+            key: "role",
+            label: "Role",
+            text: (x) => (x.role === "doctor" ? "Doctor" : "Reception"),
+            filter: "select",
+            render: (x) => (
+              <span
+                className={`badge ${x.role === "doctor" ? "badge-done" : "badge-wait"}`}
+              >
+                {x.role === "doctor" ? "Doctor" : "Reception"}
+              </span>
+            ),
+          },
+          {
+            key: "key",
+            label: "Login key",
+            text: () => "",
+            render: (x) => <KeyView id={x.id} />,
+          },
+          {
+            key: "last",
+            label: "Last active",
+            text: (x) => x.lastActive,
+            className: "whitespace-nowrap text-muted",
+          },
+          {
+            key: "added",
+            label: "Added",
+            text: (x) => x.added,
+            className: "whitespace-nowrap text-muted",
+          },
+          {
+            key: "act",
+            label: "Actions",
+            text: () => "",
+            className: "text-right",
+            render: (x) => (
+              <span className="inline-flex gap-2">
+                <button
+                  type="button"
+                  className="btn-icon"
+                  disabled={busy}
+                  aria-label={`New key for ${x.name}`}
+                  title="New key"
+                  onClick={() =>
+                    window.confirm(
+                      x.id === p.me
+                        ? "Make a new key for you? Your other devices will be logged out."
+                        : `Make a new key for ${x.name}? Their old key stops working.`,
+                    ) && start(async () => gotKey(await newKeyAction(x.id)))
+                  }
+                >
+                  <KeyRound size={16} strokeWidth={1.75} aria-hidden />
+                </button>
+                {x.role !== "doctor" && (
+                  <button
+                    type="button"
+                    className="btn-icon text-danger"
+                    disabled={busy}
+                    aria-label={`Remove ${x.name}`}
+                    title="Remove"
+                    onClick={() => setRemoving(x)}
+                  >
+                    <UserMinus size={16} strokeWidth={1.75} aria-hidden />
+                  </button>
+                )}
+              </span>
+            ),
+          },
+        ]}
+      />
       <Err id="staff-err" text={!adding ? error : undefined} />
       <button
         type="button"

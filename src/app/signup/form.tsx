@@ -26,10 +26,10 @@ const FIELDS = [
   },
   {
     name: "phone",
-    label: "WhatsApp number",
-    placeholder: "98765 43210",
-    auto: "tel",
-    mode: "tel",
+    label: "WhatsApp number (10 digits)",
+    placeholder: "10-digit number",
+    auto: "tel-national",
+    mode: "numeric",
   },
   {
     name: "email",
@@ -77,17 +77,37 @@ export function SignupForm() {
               className={`grid gap-1.5 ${f.name === "doctorName" || f.name === "email" ? "sm:col-span-2" : ""}`}
             >
               <span className="text-sm font-semibold">{f.label}</span>
-              <input
-                name={f.name}
-                defaultValue={state?.values[f.name]}
-                className="field"
-                placeholder={f.placeholder}
-                autoComplete={f.auto}
-                inputMode={"mode" in f ? f.mode : undefined}
-                maxLength={f.name === "email" ? 120 : 80}
-                aria-invalid={err ? true : undefined}
-                aria-describedby={err ? `${f.name}-err` : undefined}
-              />
+              <span className="relative block">
+                {f.name === "phone" && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-semibold text-muted"
+                  >
+                    +91
+                  </span>
+                )}
+                <input
+                  name={f.name}
+                  defaultValue={state?.values[f.name]}
+                  className={`field ${f.name === "phone" ? "pl-14 tracking-wide" : ""}`}
+                  placeholder={f.placeholder}
+                  autoComplete={f.auto}
+                  inputMode={"mode" in f ? f.mode : undefined}
+                  maxLength={
+                    f.name === "phone" ? 10 : f.name === "email" ? 120 : 80
+                  }
+                  onInput={
+                    f.name === "phone"
+                      ? (e) => {
+                          const el = e.currentTarget;
+                          el.value = el.value.replace(/\D/g, "").slice(0, 10);
+                        }
+                      : undefined
+                  }
+                  aria-invalid={err ? true : undefined}
+                  aria-describedby={err ? `${f.name}-err` : undefined}
+                />
+              </span>
               {err && (
                 <span
                   id={`${f.name}-err`}

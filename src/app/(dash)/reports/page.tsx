@@ -12,6 +12,7 @@ import {
 } from "@/lib/clinic/reports";
 import type { Activity, Appointment } from "@/lib/db/types";
 import { fmtDay, fmtTime } from "@/lib/time";
+import { type ActivityRow, ActivityTable } from "./activity-table";
 import { CollectionLine } from "./charts";
 
 export const metadata: Metadata = { title: "Reports" };
@@ -90,14 +91,24 @@ export default async function ReportsPage({
     : "month";
   const { store, doctor, now } = await requireStaff();
   const staffId = typeof who === "string" ? who : undefined;
-  const [appts, activity, staff] = await Promise.all([
+  const [appts, activity] = await Promise.all([
     store.appointmentsBetween(doctor.id, new Date(0), new Date(+now + 864e5)),
     store.activity(doctor.id, { limit: 200, staffId }),
-    store.listStaff(doctor.id),
   ]);
   const r = buildReports(appts, now);
   const s = periodSummary(appts, now, p);
   const byId = new Map(appts.map((a) => [a.id, a]));
+  const rows: ActivityRow[] = activity.map((a) => {
+    const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
+    return {
+      id: a.id,
+      when: `${fmtDay(a.at)}, ${fmtTime(a.at)}`,
+      who: a.actor,
+      kind,
+      cls,
+      what: describe(a, byId),
+    };
+  });
   const q = (o: Record<string, string>) =>
     `/reports?${new URLSearchParams({ p, ...(staffId ? { who: staffId } : {}), ...o })}`;
   const bars = [
@@ -130,75 +141,10 @@ export default async function ReportsPage({
               WhatsApp. Use it to check what happened if something looks wrong.
             </p>
           </div>
-          <nav
-            aria-label="Filter activity by person"
-            className="flex flex-wrap gap-2"
-          >
-            <Link
-              href={`/reports?p=${p}&view=activity`}
-              className="pill"
-              aria-current={!staffId ? "page" : undefined}
-            >
-              Everyone
-            </Link>
-            {staff.map((x) => (
-              <Link
-                key={x.id}
-                href={q({ who: x.id, view: "activity" })}
-                className="pill"
-                aria-current={staffId === x.id ? "page" : undefined}
-              >
-                {x.role === "doctor" ? doctor.name : x.name}
-              </Link>
-            ))}
-          </nav>
-          <div className="scroll-area inner max-h-[calc(100dvh-420px)] min-h-60 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="sticky top-0 bg-sunk text-[12px] text-muted">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-semibold">
-                    When
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-semibold">
-                    Who
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-semibold">
-                    Type
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-semibold">
-                    What happened
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--line)]">
-                {activity.map((a) => {
-                  const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
-                  return (
-                    <tr key={a.id}>
-                      <td className="px-4 py-3 whitespace-nowrap text-muted">
-                        {fmtDay(a.at)}, {fmtTime(a.at)}
-                      </td>
-                      <td className="px-4 py-3 font-semibold">{a.actor}</td>
-                      <td className="px-4 py-3">
-                        <span className={`badge ${cls}`}>{kind}</span>
-                      </td>
-                      <td className="px-4 py-3">{describe(a, byId)}</td>
-                    </tr>
-                  );
-                })}
-                {!activity.length && (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-8 text-center text-muted"
-                    >
-                      Nothing yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ActivityTable
+            rows={rows}
+            className="max-h-[calc(100dvh-420px)] min-h-60"
+          />
         </section>
       </div>
     );
@@ -339,55 +285,7 @@ export default async function ReportsPage({
               Open full table with filters
             </Link>
           </div>
-          <div className="scroll-area inner max-h-80 overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left text-sm">
-              <thead className="sticky top-0 bg-sunk text-[12px] text-muted">
-                <tr>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
-                    When
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
-                    Who
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
-                    Type
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-semibold">
-                    What happened
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--line)]">
-                {activity.slice(0, 50).map((a) => {
-                  const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
-                  return (
-                    <tr key={a.id}>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-muted">
-                        {fmtDay(a.at)}, {fmtTime(a.at)}
-                      </td>
-                      <td className="px-4 py-2.5 font-semibold whitespace-nowrap">
-                        {a.actor}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className={`badge ${cls}`}>{kind}</span>
-                      </td>
-                      <td className="px-4 py-2.5">{describe(a, byId)}</td>
-                    </tr>
-                  );
-                })}
-                {!activity.length && (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-4 py-8 text-center text-muted"
-                    >
-                      Nothing yet. Bookings, visits and changes show up here.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ActivityTable rows={rows} className="max-h-80" />
         </section>
       </Rise>
     </div>
