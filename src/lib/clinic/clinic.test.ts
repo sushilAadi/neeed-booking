@@ -2,7 +2,12 @@ import { expect, test } from "vitest";
 import { DOC, NOW } from "../bot/test-kit";
 import { createMemoryStore } from "../db/memory-store";
 import { atIst } from "../time";
-import { addBlockRange, setClosedToday, validateHours } from "./availability";
+import {
+  addBlockRange,
+  saveHours,
+  setClosedToday,
+  validateHours,
+} from "./availability";
 import { bookToday, validatePatient } from "./booking";
 import { lastPatientDetails, normalizePhone, parseNameAge } from "./patient";
 import {
@@ -438,4 +443,51 @@ test("parseNameAge: the number before or after the name is the age", () => {
   expect(parseNameAge("Ramesh")).toEqual({ name: "Ramesh", age: null });
   expect(parseNameAge("Ramesh 150")).toEqual({ name: "Ramesh 150", age: null });
   expect(parseNameAge("45")).toEqual({ name: "", age: 45 });
+});
+
+test("saveHours: checks every period against the new hours, saves and logs", async () => {
+  const store = createMemoryStore({ doctors: [DOC] });
+  const bad = await saveHours(
+    store,
+    DOC,
+    {
+      morning: { start: "09:00", end: "13:00" },
+      afternoon: { start: "12:00", end: "17:00" },
+      evening: null,
+      lunch: null,
+      slotMinutes: 15,
+    },
+    RIYA,
+    NOW,
+  );
+  expect(bad.ok).toBe(false);
+  if (!bad.ok) expect(bad.errors.afternoon).toMatch(/overlaps your morning/);
+  if (!bad.ok) expect(bad.errors.afternoon).not.toMatch(/button/);
+  expect((await store.doctorById(DOC.id))?.morningStart).toBe("10:00");
+
+  const good = await saveHours(
+    store,
+    DOC,
+    {
+      morning: { start: "09:00", end: "13:00" },
+      afternoon: null,
+      evening: { start: "17:00", end: "20:00" },
+      lunch: { start: "13:00", end: "14:00" },
+      slotMinutes: 15,
+    },
+    RIYA,
+    NOW,
+  );
+  expect(good.ok).toBe(true);
+  expect(await store.doctorById(DOC.id)).toMatchObject({
+    morningStart: "09:00",
+    afternoonStart: null,
+    afternoonEnd: null,
+    eveningEnd: "20:00",
+    lunchStart: "13:00",
+    slotMinutes: 15,
+    hoursSet: true,
+  });
+  const log = await store.activity(DOC.id, { limit: 5 });
+  expect(log.map((a) => a.action)).toEqual(["hours_changed"]);
 });

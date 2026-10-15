@@ -1,5 +1,5 @@
 import { today } from "../bot/ctx";
-import type { Appointment, Doctor, Store } from "../db/types";
+import type { Appointment, Doctor, HoursPatch, Store } from "../db/types";
 import {
   crosses,
   lunchHours,
@@ -45,6 +45,49 @@ export function validateHours(
   return clash
     ? `That overlaps your ${clash} hours (${rangeText(periodHours(d, clash))}). Type different hours, or tap a button.`
     : null;
+}
+
+export type HoursKey = Period | "lunch";
+export type HoursForm = Record<HoursKey, Range | null> & {
+  slotMinutes: number;
+};
+
+/** Saves the whole hours form (web Settings) once every period fits the others. Existing bookings are kept. */
+export async function saveHours(
+  store: Store,
+  doctor: Doctor,
+  f: HoursForm,
+  actor: Actor,
+  now: Date,
+): Promise<
+  { ok: true } | { ok: false; errors: Partial<Record<HoursKey, string>> }
+> {
+  const patch: HoursPatch = {
+    slotMinutes: [15, 30, 45, 60].includes(f.slotMinutes)
+      ? f.slotMinutes
+      : doctor.slotMinutes,
+    hoursSet: true,
+  };
+  for (const k of [...PERIODS, "lunch"] as const) {
+    patch[`${k}Start`] = f[k]?.start ?? null;
+    patch[`${k}End`] = f[k]?.end ?? null;
+  }
+  const draft = { ...doctor, ...patch };
+  const errors: Partial<Record<HoursKey, string>> = {};
+  for (const k of [...PERIODS, "lunch"] as const) {
+    const r = f[k];
+    if (r && r.end <= r.start)
+      errors[k] = "The end time must be after the start.";
+    else {
+      const why = validateHours(draft, k, r);
+      // The bot's "tap a button" hint has no button on the web form.
+      if (why) errors[k] = why.replace(", or tap a button.", ".");
+    }
+  }
+  if (Object.keys(errors).length) return { ok: false, errors };
+  await store.updateDoctor(doctor.id, patch);
+  await record(store, doctor.id, actor, "hours_changed", {}, now);
+  return { ok: true };
 }
 
 /** null = ask first (return the clash count); "cancel" = cancel & notify; "keep" = keep bookings. */
