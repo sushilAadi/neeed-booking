@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, Sparkles } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Morph } from "cube-motion/react";
+import { CalendarPlus, Check, Sparkles } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import {
   type AddResult,
   addPatient,
@@ -24,8 +25,15 @@ const GENDERS = [
   ["O", "Other"],
 ] as const;
 
-export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
-  const [f, setF] = useState(EMPTY);
+export function AddForm({
+  initialSlots,
+  initialPhone = "",
+}: {
+  initialSlots: SlotGroups;
+  initialPhone?: string;
+}) {
+  const [f, setF] = useState({ ...EMPTY, phone: initialPhone });
+  const [booked, setBooked] = useState(false);
   const [slots, setSlots] = useState(initialSlots);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -36,9 +44,9 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
     setErrors((e) => ({ ...e, [k]: "" }));
   };
 
-  const prefill = () =>
+  const prefill = (phone = f.phone) =>
     start(async () => {
-      const last = await lookupPatient(f.phone);
+      const last = await lookupPatient(phone);
       if (!last) return setFilled(false);
       setF((x) => ({
         ...x,
@@ -49,6 +57,12 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
       }));
       setFilled(true);
     });
+
+  // "Book again" from History opens /add?phone=…
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run once for the initial phone
+  useEffect(() => {
+    if (initialPhone) prefill(initialPhone);
+  }, []);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +75,8 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
         setFilled(false);
         setErrors({});
         setNote({ ok: true, text: r.message });
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        setBooked(true);
+        setTimeout(() => setBooked(false), 2500);
       } else {
         setErrors(r.errors ?? {});
         if (r.slots) set("slot", "");
@@ -78,10 +93,14 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
     ) : null;
 
   return (
-    <form onSubmit={submit} noValidate className="grid gap-4">
+    <form
+      onSubmit={submit}
+      noValidate
+      className="grid gap-4 lg:grid-cols-2 lg:items-start"
+    >
       {note && (
         <output
-          className={`block rounded-2xl px-4 py-3 text-[15px] font-semibold ${
+          className={`block rounded-full px-5 py-3 lg:col-span-2 text-[15px] font-semibold ${
             note.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"
           }`}
         >
@@ -90,7 +109,7 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
         </output>
       )}
 
-      <section className="card grid gap-4 p-5">
+      <section className="card card-pad grid gap-4" aria-label="Patient">
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold">WhatsApp mobile no.</span>
           <input
@@ -198,46 +217,58 @@ export function AddForm({ initialSlots }: { initialSlots: SlotGroups }) {
         </label>
       </section>
 
-      <section className="card grid gap-4 p-5" aria-labelledby="time-h">
+      <section
+        className="card card-pad flex flex-col gap-4 lg:max-h-[calc(100dvh-230px)]"
+        aria-labelledby="time-h"
+      >
         <div className="flex items-baseline justify-between">
-          <h2 id="time-h" className="font-bold">
+          <h2 id="time-h" className="display text-[20px] font-medium">
             Time today
           </h2>
           {err("slot")}
         </div>
-        {!slots.length ? (
-          <p className="text-[15px] text-muted">No free times left today.</p>
-        ) : (
-          slots.map((g) => (
-            <div key={g.period} className="grid gap-2">
-              <p className="eyebrow">{g.period}</p>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {g.slots.map((s) => (
-                  <label key={s.iso} className="chip display cursor-pointer">
-                    <input
-                      type="radio"
-                      name="slot"
-                      value={s.iso}
-                      className="sr-only"
-                      checked={f.slot === s.iso}
-                      onChange={() => set("slot", s.iso)}
-                    />
-                    {s.label}
-                  </label>
-                ))}
+        <div className="scroll-area -mx-1 grid content-start gap-4 px-1 lg:flex-1">
+          {!slots.length ? (
+            <p className="text-[15px] text-muted">No free times left today.</p>
+          ) : (
+            slots.map((g) => (
+              <div key={g.period} className="grid gap-2">
+                <p className="eyebrow">{g.period}</p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {g.slots.map((s) => (
+                    <label
+                      key={s.iso}
+                      className="chip display cursor-pointer px-2 whitespace-nowrap"
+                    >
+                      <input
+                        type="radio"
+                        name="slot"
+                        value={s.iso}
+                        className="sr-only"
+                        checked={f.slot === s.iso}
+                        onChange={() => set("slot", s.iso)}
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
+        <button
+          type="submit"
+          className="btn btn-primary max-lg:sticky max-lg:bottom-24"
+          disabled={busy}
+        >
+          <CalendarPlus size={18} strokeWidth={1.75} aria-hidden />
+          {busy ? (
+            "Booking…"
+          ) : (
+            <Morph active={booked} off="Book appointment" on="Booked" />
+          )}
+        </button>
       </section>
-
-      <button
-        type="submit"
-        className="btn btn-primary sticky bottom-24 md:bottom-6"
-        disabled={busy}
-      >
-        {busy ? "Booking…" : "Book appointment"}
-      </button>
     </form>
   );
 }
