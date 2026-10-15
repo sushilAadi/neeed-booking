@@ -1,5 +1,6 @@
 "use client";
 
+import { Morph, Rise } from "cube-motion/react";
 import { Copy, Download, KeyRound, UserMinus, UserPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Sheet } from "@/components/sheet";
@@ -21,23 +22,29 @@ import {
 function useRun() {
   const [busy, start] = useTransition();
   const [toast, setToast] = useState("");
-  const say = (m: string) => {
+  const [saved, setSaved] = useState(false);
+  const say = (m: string, ok = true) => {
     setToast(m);
-    setTimeout(() => setToast(""), 3500);
+    setSaved(ok);
+    setTimeout(() => {
+      setToast("");
+      setSaved(false);
+    }, 3500);
   };
   const toastEl = (
-    <output
-      aria-live="polite"
-      className={`fixed inset-x-4 bottom-24 z-40 mx-auto max-w-md rounded-2xl bg-ink px-4 py-3 text-center text-[15px] font-semibold text-bg shadow-lg transition-all md:bottom-8 ${
-        toast
-          ? "translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-3 opacity-0"
-      }`}
+    <Rise
+      show={!!toast}
+      className="pointer-events-none fixed inset-x-4 bottom-28 z-40 mx-auto max-w-md md:bottom-8"
     >
-      {toast}
-    </output>
+      <output
+        aria-live="polite"
+        className="block rounded-full bg-ink px-5 py-3 text-center text-[15px] font-semibold text-bg shadow-lg"
+      >
+        {toast}
+      </output>
+    </Rise>
   );
-  return { busy, start, say, toastEl };
+  return { busy, start, say, saved, toastEl };
 }
 
 function Section(p: {
@@ -46,9 +53,9 @@ function Section(p: {
   children: React.ReactNode;
 }) {
   return (
-    <section className="card grid gap-4 p-5">
+    <section className="card card-pad grid grid-cols-[minmax(0,1fr)] content-start gap-4">
       <div>
-        <h2 className="display text-lg font-bold">{p.title}</h2>
+        <h2 className="display text-[20px] font-medium">{p.title}</h2>
         {p.hint && <p className="text-sm text-muted">{p.hint}</p>}
       </div>
       {p.children}
@@ -75,7 +82,7 @@ const ROWS: [HoursKey, string][] = [
 export function Hours(p: { initial: HoursForm }) {
   const [f, setF] = useState<HoursForm>(p.initial);
   const [errors, setErrors] = useState<Partial<Record<HoursKey, string>>>({});
-  const { busy, start, say, toastEl } = useRun();
+  const { busy, start, say, saved, toastEl } = useRun();
   const setRow = (k: HoursKey, r: Range | null) => setF({ ...f, [k]: r });
 
   return (
@@ -86,52 +93,55 @@ export function Hours(p: { initial: HoursForm }) {
       {ROWS.map(([k, label]) => {
         const r = f[k];
         return (
-          <fieldset key={k} className="grid gap-2">
-            <legend className="mb-1 flex w-full items-center justify-between text-sm font-semibold">
+          <fieldset
+            key={k}
+            className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)_auto]"
+          >
+            <legend className="sr-only">{label}</legend>
+            <span aria-hidden className="text-sm font-semibold max-sm:order-1">
               {label}
-              <label className="flex items-center gap-2 font-normal text-muted">
+            </span>
+            {r ? (
+              (["start", "end"] as const).map((side) => (
                 <input
-                  type="checkbox"
-                  className="size-5 accent-[var(--accent)]"
-                  checked={!r}
-                  onChange={(e) =>
-                    setRow(
-                      k,
-                      e.target.checked
-                        ? null
-                        : (p.initial[k] ??
-                            (k === "lunch"
-                              ? { start: "13:00", end: "14:00" }
-                              : { start: "09:00", end: "12:00" })),
-                    )
-                  }
+                  key={side}
+                  type="time"
+                  step={900}
+                  className="field min-h-11 min-w-0 px-2 text-[14px] max-sm:order-3"
+                  aria-label={`${label} ${side === "start" ? "from" : "to"}`}
+                  value={r[side]}
+                  aria-invalid={!!errors[k] || undefined}
+                  aria-describedby={`h-${k}-err`}
+                  onChange={(e) => setRow(k, { ...r, [side]: e.target.value })}
                 />
-                Off
-              </label>
-            </legend>
-            {r && (
-              <div className="grid grid-cols-2 gap-3">
-                {(["start", "end"] as const).map((side) => (
-                  <label key={side} className="grid gap-1">
-                    <span className="text-xs text-muted">
-                      {side === "start" ? "From" : "To"}
-                    </span>
-                    <input
-                      type="time"
-                      step={900}
-                      className="field"
-                      value={r[side]}
-                      aria-invalid={!!errors[k] || undefined}
-                      aria-describedby={`h-${k}-err`}
-                      onChange={(e) =>
-                        setRow(k, { ...r, [side]: e.target.value })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
+              ))
+            ) : (
+              <span className="col-span-2 text-sm text-muted max-sm:order-3">
+                {k === "lunch" ? "No break" : "Closed"}
+              </span>
             )}
-            <Err id={`h-${k}-err`} text={errors[k]} />
+            <label className="flex min-h-11 items-center gap-1.5 justify-self-end text-[13px] text-muted max-sm:order-2">
+              <input
+                type="checkbox"
+                className="size-4 accent-[var(--accent)]"
+                checked={!r}
+                onChange={(e) =>
+                  setRow(
+                    k,
+                    e.target.checked
+                      ? null
+                      : (p.initial[k] ??
+                          (k === "lunch"
+                            ? { start: "13:00", end: "14:00" }
+                            : { start: "09:00", end: "12:00" })),
+                  )
+                }
+              />
+              Off
+            </label>
+            <div className="col-span-2 empty:hidden max-sm:order-4 sm:col-span-4">
+              <Err id={`h-${k}-err`} text={errors[k]} />
+            </div>
           </fieldset>
         );
       })}
@@ -169,7 +179,11 @@ export function Hours(p: { initial: HoursForm }) {
           })
         }
       >
-        {busy ? "Saving…" : "Save hours"}
+        {busy ? (
+          "Saving…"
+        ) : (
+          <Morph active={saved} off="Save hours" on="Saved" />
+        )}
       </button>
       {toastEl}
     </Section>
@@ -180,7 +194,7 @@ export function Hours(p: { initial: HoursForm }) {
 
 export function Fee(p: { initial: number }) {
   const [fee, setFee] = useState(String(p.initial));
-  const { busy, start, say, toastEl } = useRun();
+  const { busy, start, say, saved, toastEl } = useRun();
   return (
     <Section
       title="Standard fee"
@@ -203,10 +217,13 @@ export function Fee(p: { initial: number }) {
         className="btn btn-primary"
         disabled={busy || fee === "" || Number(fee) === p.initial}
         onClick={() =>
-          start(async () => say((await saveFeeAction(Number(fee))).message))
+          start(async () => {
+            const r = await saveFeeAction(Number(fee));
+            say(r.message, r.ok);
+          })
         }
       >
-        {busy ? "Saving…" : "Save fee"}
+        {busy ? "Saving…" : <Morph active={saved} off="Save fee" on="Saved" />}
       </button>
       {toastEl}
     </Section>
@@ -350,14 +367,14 @@ export function BlockTime(p: {
 export function RxSetup(p: { reg: string; sigUrl: string | null }) {
   const [preview, setPreview] = useState(p.sigUrl);
   const [error, setError] = useState("");
-  const { busy, start, say, toastEl } = useRun();
+  const { busy, start, say, saved, toastEl } = useRun();
   return (
     <Section
       title="Prescription setup"
       hint="Printed on every prescription PDF."
     >
       <form
-        className="grid gap-4"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
         action={(form) =>
           start(async () => {
             const r = await saveRxSetupAction(form);
@@ -376,7 +393,7 @@ export function RxSetup(p: { reg: string; sigUrl: string | null }) {
           />
         </label>
         <label className="grid gap-1.5">
-          <span className="text-sm font-semibold">
+          <span className="min-w-0 text-sm font-semibold">
             Signature{" "}
             <span className="font-normal text-muted">
               (PNG or JPG, up to 2 MB)
@@ -386,7 +403,7 @@ export function RxSetup(p: { reg: string; sigUrl: string | null }) {
             name="signature"
             type="file"
             accept="image/png,image/jpeg"
-            className="text-sm file:mr-3 file:min-h-11 file:rounded-xl file:border file:border-[var(--line)] file:bg-[var(--surface)] file:px-3 file:font-semibold"
+            className="w-full min-w-0 text-sm file:mr-3 file:min-h-11 file:rounded-xl file:border file:border-[var(--line)] file:bg-[var(--surface)] file:px-3 file:font-semibold"
             aria-describedby="sig-err"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -408,7 +425,11 @@ export function RxSetup(p: { reg: string; sigUrl: string | null }) {
         )}
         <Err id="sig-err" text={error} />
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? "Saving…" : "Save prescription setup"}
+          {busy ? (
+            "Saving…"
+          ) : (
+            <Morph active={saved} off="Save prescription setup" on="Saved" />
+          )}
         </button>
       </form>
       {toastEl}

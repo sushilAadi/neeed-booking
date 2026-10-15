@@ -1,5 +1,7 @@
+import { Rise } from "cube-motion/react";
 import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
+import { PageHead } from "@/components/page-head";
 import { requireStaff } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
 import { PERIODS, periodHours } from "@/lib/slots";
@@ -38,42 +40,56 @@ export default async function Page() {
 
   return (
     <div className="grid gap-5">
-      <h1 className="display text-[28px] font-bold">Settings</h1>
-      <Hours
-        initial={{
-          morning: periodHours(doctor, "morning"),
-          afternoon: periodHours(doctor, "afternoon"),
-          evening: periodHours(doctor, "evening"),
-          lunch:
-            doctor.lunchStart && doctor.lunchEnd
-              ? { start: doctor.lunchStart, end: doctor.lunchEnd }
-              : null,
-          slotMinutes: doctor.slotMinutes,
-        }}
+      <PageHead
+        eyebrow="Clinic hours, fees, prescriptions and staff"
+        title="Settings"
       />
-      <Fee initial={doctor.standardFee} />
-      <BlockTime
-        days={days}
-        off={PERIODS.filter((p) => !periodHours(doctor, p))}
-      />
-      {isDoctor && (
-        <>
-          <RxSetup reg={doctor.registrationNumber ?? ""} sigUrl={sigUrl} />
-          <StaffList
-            me={staff.id}
-            people={people
-              .filter((p) => p.active)
-              .map((p) => ({
-                id: p.id,
-                name: p.role === "doctor" ? `${doctor.name} (you)` : p.name,
-                role: p.role,
-                added: fmtDate(p.createdAt),
-                lastActive: p.lastActiveAt ? fmtDate(p.lastActiveAt) : "Never",
-              }))}
+      <Rise
+        targets="children"
+        className="grid items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:h-[calc(100dvh-236px)] xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-stretch"
+      >
+        <div className="scroll-area grid grid-cols-[minmax(0,1fr)] content-start gap-4 xl:-mx-2 xl:px-2 xl:pb-2">
+          <Hours
+            initial={{
+              morning: periodHours(doctor, "morning"),
+              afternoon: periodHours(doctor, "afternoon"),
+              evening: periodHours(doctor, "evening"),
+              lunch:
+                doctor.lunchStart && doctor.lunchEnd
+                  ? { start: doctor.lunchStart, end: doctor.lunchEnd }
+                  : null,
+              slotMinutes: doctor.slotMinutes,
+            }}
           />
-        </>
-      )}
-      <form action="/logout" method="post">
+        </div>
+        <div className="scroll-area grid grid-cols-[minmax(0,1fr)] content-start gap-4 xl:-mx-2 xl:px-2 xl:pb-2">
+          <Fee initial={doctor.standardFee} />
+          <BlockTime
+            days={days}
+            off={PERIODS.filter((p) => !periodHours(doctor, p))}
+          />
+        </div>
+        {isDoctor && (
+          <div className="scroll-area grid grid-cols-[minmax(0,1fr)] content-start gap-4 md:col-span-2 xl:col-span-1 xl:-mx-2 xl:px-2 xl:pb-2">
+            <RxSetup reg={doctor.registrationNumber ?? ""} sigUrl={sigUrl} />
+            <StaffList
+              me={staff.id}
+              people={people
+                .filter((p) => p.active)
+                .map((p) => ({
+                  id: p.id,
+                  name: p.role === "doctor" ? `${doctor.name} (you)` : p.name,
+                  role: p.role,
+                  added: fmtDate(p.createdAt),
+                  lastActive: p.lastActiveAt
+                    ? fmtDate(p.lastActiveAt)
+                    : "Never",
+                }))}
+            />
+          </div>
+        )}
+      </Rise>
+      <form action="/logout" method="post" className="md:hidden">
         <button type="submit" className="btn btn-ghost w-full">
           <LogOut size={18} aria-hidden /> Log out
         </button>
