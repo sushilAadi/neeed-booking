@@ -58,7 +58,9 @@
 
 @theme inline {
   --font-sans: var(--font-body), system-ui, sans-serif;
-  --font-display: var(--font-heading), var(--font-body), system-ui, sans-serif;
+  /* Matangi for all text under 50px; Gurvaco only via .display-xl (50px and up). */
+  --font-display: var(--font-body), system-ui, sans-serif;
+  --font-hero: var(--font-heading), var(--font-body), system-ui, sans-serif;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-sunk: var(--sunk);
@@ -103,6 +105,9 @@ body {
   .display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+  }
+  .display-xl {
+    font-family: var(--font-hero);
   }
   .eyebrow {
     font-size: 12px;

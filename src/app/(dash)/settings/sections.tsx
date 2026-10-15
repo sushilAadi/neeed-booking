@@ -537,7 +537,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
         <p className="text-[15px] font-semibold text-danger">
           Save this now. It won't be shown again.
         </p>
-        <p className="display select-all rounded-2xl border bg-sunk p-4 text-center text-xl font-bold tracking-wider">
+        <p className="select-all rounded-2xl border bg-sunk p-4 text-center text-xl font-bold tracking-wider">
           {shown?.key}
         </p>
         <div className="grid grid-cols-2 gap-2">

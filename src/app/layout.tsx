@@ -1,15 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Schibsted_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const body = Manrope({
-  subsets: ["latin"],
+// Same fonts as the Uranium Fitness site.
+const body = localFont({
+  src: "./fonts/matangi-latin.woff2",
+  weight: "300 900",
   display: "swap",
   variable: "--font-body",
 });
-const heading = Schibsted_Grotesk({
-  subsets: ["latin"],
+const heading = localFont({
+  src: "./fonts/gurvaco-regular.woff2",
+  weight: "400",
   display: "swap",
+  // Only for text 50px and up (.display-xl); not downloaded until used.
+  preload: false,
   variable: "--font-heading",
 });
 

@@ -23,7 +23,7 @@ export function LoginForm() {
           placeholder="DR-XXXX-XXXX-XXXX"
           aria-invalid={state.message ? true : undefined}
           aria-describedby="key-help"
-          className="field display tracking-[0.12em] uppercase"
+          className="field font-semibold tracking-[0.12em] uppercase"
         />
       </label>
       <output id="key-help" className="block min-h-5 text-sm">
