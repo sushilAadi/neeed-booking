@@ -343,15 +343,15 @@ function Stat(p: {
   tone: keyof typeof TONE;
 }) {
   return (
-    <div className="card lift flex items-center gap-4 p-4 md:p-5">
+    <div className="card lift flex items-center gap-3 p-3 md:gap-4 md:p-5">
       <span
-        className={`grid size-11 shrink-0 place-items-center rounded-full ${TONE[p.tone]}`}
+        className={`grid size-9 shrink-0 place-items-center rounded-full md:size-11 ${TONE[p.tone]}`}
       >
         <p.Icon size={20} strokeWidth={1.75} aria-hidden />
       </span>
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-muted">{p.label}</p>
-        <p className="display truncate text-[26px] leading-tight font-medium">
+        <p className="display truncate text-[20px] leading-tight font-medium md:text-[26px]">
           {p.value}
         </p>
       </div>
@@ -372,12 +372,6 @@ function queueColumns(
 ): Column<Card>[] {
   return [
     {
-      key: "time",
-      label: "Time",
-      text: (c) => c.time,
-      className: "whitespace-nowrap font-semibold",
-    },
-    {
       key: "name",
       label: "Patient",
       text: (c) => c.name,
@@ -390,6 +384,12 @@ function queueColumns(
           {c.name}
         </span>
       ),
+    },
+    {
+      key: "time",
+      label: "Time",
+      text: (c) => c.time,
+      className: "whitespace-nowrap font-semibold",
     },
     {
       key: "facts",

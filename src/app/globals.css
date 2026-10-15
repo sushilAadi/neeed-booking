@@ -117,6 +117,74 @@ body {
   }
 }
 
+@layer base {
+  /* Grid/flex children in pages never grow past the screen (wide tables scroll or stack instead) */
+  main :where(.grid, .flex) > * {
+    min-width: 0;
+  }
+}
+
+/* Phones: tables become an app-style list — no nested boxes, one row per item:
+   first two cells bold on top, the rest as one small grey line, badges/buttons inline */
+@media (max-width: 639px) {
+  .dt {
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+  .dt table,
+  .dt tbody {
+    display: block;
+    width: 100%;
+  }
+  .dt table {
+    /* biome-ignore lint/complexity/noImportantStyles: beats the inline min-width that desktop needs */
+    min-width: 0 !important;
+  }
+  .dt thead {
+    display: none;
+  }
+  .dt tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 4px;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .dt tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .dt tbody td {
+    display: inline-flex;
+    align-items: center;
+    border: 0;
+    padding: 0;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .dt tbody td:empty {
+    display: none;
+  }
+  /* the first column is the title on its own line; the rest is one grey detail line */
+  .dt tbody td:first-child {
+    flex: 1 1 100%;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  /* the rest wrap onto the second line, separated by dots */
+  .dt tbody
+    td:nth-child(n + 2):not(:last-child):not(
+      :has(.badge, button, a.btn-icon)
+    )::after {
+    content: "·";
+    margin-left: 6px;
+  }
+}
+
 @layer components {
   .card {
     background: var(--surface);
@@ -161,7 +229,7 @@ body {
     color: var(--muted);
   }
   .page-title {
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1.1;
     font-weight: 500;
     letter-spacing: -0.03em;

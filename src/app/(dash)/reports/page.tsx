@@ -211,16 +211,16 @@ export default async function ReportsPage({
         ).map(([label, value, Icon, tone]) => (
           <div
             key={label}
-            className="card lift flex items-center gap-4 p-4 md:p-5"
+            className="card lift flex items-center gap-3 p-3 md:gap-4 md:p-5"
           >
             <span
-              className={`grid size-11 shrink-0 place-items-center rounded-full ${tone}`}
+              className={`grid size-9 shrink-0 place-items-center rounded-full md:size-11 ${tone}`}
             >
               <Icon size={20} strokeWidth={1.75} aria-hidden />
             </span>
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-muted">{label}</p>
-              <p className="display truncate text-[26px] leading-tight font-medium">
+              <p className="display truncate text-[20px] leading-tight font-medium md:text-[26px]">
                 {value}
               </p>
             </div>

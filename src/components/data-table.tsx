@@ -48,7 +48,9 @@ export function DataTable<T>(p: {
     [...new Set(p.rows.map(c.text))].filter(Boolean).sort();
 
   return (
-    <div className={`scroll-area inner overflow-x-auto ${p.className ?? ""}`}>
+    <div
+      className={`dt scroll-area inner overflow-x-auto ${p.className ?? ""}`}
+    >
       <table
         style={{ minWidth: p.minWidth ?? 620 }}
         className="w-full border-separate border-spacing-0 text-left text-sm"
@@ -128,6 +130,8 @@ export function DataTable<T>(p: {
                 {p.columns.map((c, i) => (
                   <td
                     key={c.key}
+                    // label shown beside the value when rows stack as cards on phones
+                    data-label={/action/i.test(c.label) ? "" : c.label}
                     className={`border-b border-line px-3 py-2.5 ${c.className ?? ""}`}
                   >
                     {p.href && i === 0 ? (
