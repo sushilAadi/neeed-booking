@@ -1,4 +1,5 @@
 import type {
+  AccessRequest,
   Activity,
   Appointment,
   Block,
@@ -11,6 +12,7 @@ import type {
 export type MemoryStore = Store & {
   appointments: Appointment[];
   files: Map<string, Uint8Array>;
+  accessRequests: (AccessRequest & { at: Date })[];
 };
 
 export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
@@ -24,6 +26,7 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
   const staff: (Staff & { keyHash: string })[] = [];
   const acts: Activity[] = [];
   const fails: { ip: string; at: Date }[] = [];
+  const accessRequests: (AccessRequest & { at: Date })[] = [];
   let seq = 0;
   const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
   const key = (a: string, b: string) => `${a}|${b}`;
@@ -208,6 +211,13 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
     },
     async addLoginFailure(ip, at) {
       fails.push({ ip, at });
+    },
+    accessRequests,
+    async addAccessRequest(r, at) {
+      accessRequests.push({ ...r, at });
+    },
+    async accessRequestsSince(ip, since) {
+      return accessRequests.filter((r) => r.ip === ip && r.at >= since).length;
     },
   };
 }

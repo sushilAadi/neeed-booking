@@ -427,5 +427,27 @@ export function createSupabaseStore(): Store {
         await db.from("login_attempts").insert({ ip, at: at.toISOString() }),
       );
     },
+    async addAccessRequest(r, at) {
+      must(
+        await db.from("access_requests").insert({
+          doctor_name: r.doctorName,
+          clinic_name: r.clinicName,
+          city: r.city,
+          phone: r.phone,
+          email: r.email,
+          ip: r.ip,
+          created_at: at.toISOString(),
+        }),
+      );
+    },
+    async accessRequestsSince(ip, since) {
+      const { count, error } = await db
+        .from("access_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("ip", ip)
+        .gte("created_at", since.toISOString());
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
   };
 }

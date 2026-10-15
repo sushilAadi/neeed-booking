@@ -111,6 +111,15 @@ export type Conversation = {
   ctx: Record<string, unknown>;
   lastInboundAt: Date | null;
 };
+export type AccessRequest = {
+  doctorName: string;
+  clinicName: string;
+  city: string;
+  /** "91" + 10 digits */
+  phone: string;
+  email: string | null;
+  ip: string;
+};
 export type Bucket = "signatures" | "prescriptions";
 export interface Store {
   doctorByBusinessNumber(phoneNumberId: string): Promise<Doctor | null>;
@@ -181,4 +190,6 @@ export interface Store {
   ): Promise<Activity[]>; // newest first
   loginFailures(ip: string, since: Date): Promise<number>;
   addLoginFailure(ip: string, at: Date): Promise<void>;
+  addAccessRequest(r: AccessRequest, at: Date): Promise<void>;
+  accessRequestsSince(ip: string, since: Date): Promise<number>;
 }
