@@ -6,12 +6,11 @@ import {
   CheckCircle2,
   Clock,
   IndianRupee,
-  Search,
   Stethoscope,
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { type Column, DataTable } from "@/components/data-table";
 import { PageHead } from "@/components/page-head";
 import { Ring } from "@/components/ring";
@@ -67,20 +66,9 @@ export function TodayView(p: {
     collection: number;
   };
 }) {
-  const [q, setQ] = useState("");
   const [pending, setPending] = useState<Pending>(null);
   const [toast, setToast] = useState("");
   const [busy, start] = useTransition();
-
-  const shown = useMemo(() => {
-    const s = q.trim().toLowerCase().replace(/\s+/g, "");
-    if (!s) return p.cards;
-    return p.cards.filter(
-      (c) =>
-        c.name.toLowerCase().replace(/\s+/g, "").includes(s) ||
-        c.phone.includes(s.replace(/^\+/, "")),
-    );
-  }, [q, p.cards]);
 
   const run = (
     fn: () => Promise<{ ok: boolean; message: string; clash?: number }>,
@@ -97,7 +85,7 @@ export function TodayView(p: {
     });
 
   const [period, setPeriod] = useState<Card["group"] | "all">("all");
-  const listed = shown.filter((c) => period === "all" || c.group === period);
+  const listed = p.cards.filter((c) => period === "all" || c.group === period);
   const next = p.cards.find((c) => c.status === "CONFIRMED");
   // Morning, afternoon and evening always show; "Other times" only when used.
   const periods = GROUPS.filter(
@@ -195,21 +183,6 @@ export function TodayView(p: {
               </fieldset>
             )}
           </div>
-          <label className="relative block">
-            <span className="sr-only">Search by name or number</span>
-            <Search
-              size={18}
-              className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name or number"
-              className="field pl-11"
-            />
-          </label>
           {!p.cards.length ? (
             <div className="grid flex-1 place-items-center gap-3 p-8 text-center">
               <Stethoscope className="text-muted" size={28} aria-hidden />
@@ -398,18 +371,20 @@ function queueColumns(
       label: "Patient",
       text: (c) => c.name,
       filter: "text",
+      className: "whitespace-nowrap font-semibold",
       render: (c) => (
-        <span className="block min-w-0">
-          <span
-            className={`block font-semibold ${c.status === "CANCELLED" ? "text-muted line-through" : ""}`}
-          >
-            {c.name}
-          </span>
-          <span className="block text-[12px] text-muted">
-            {facts(c) || "—"}
-          </span>
+        <span
+          className={c.status === "CANCELLED" ? "text-muted line-through" : ""}
+        >
+          {c.name}
         </span>
       ),
+    },
+    {
+      key: "facts",
+      label: "Age / sex",
+      text: (c) => facts(c),
+      className: "whitespace-nowrap text-muted",
     },
     {
       key: "phone",
@@ -453,8 +428,13 @@ function queueColumns(
       render: (c) =>
         c.status === "CONFIRMED" ? (
           <span className="inline-flex gap-2">
-            <Link href={`/visit/${c.id}`} className="btn btn-primary btn-sm">
-              <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden /> Complete
+            <Link
+              href={`/visit/${c.id}`}
+              className="btn-icon bg-accent text-accent-ink"
+              aria-label={`Mark ${c.name}'s visit complete`}
+              title="Mark complete"
+            >
+              <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden />
             </Link>
             <button
               type="button"
@@ -469,7 +449,7 @@ function queueColumns(
           <button
             type="button"
             onClick={() => onFee(c)}
-            className="btn btn-ghost btn-sm"
+            className="inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline"
             aria-label={`${c.fee === null ? "Add fee" : rupees(c.fee)}, edit fee for ${c.name}`}
           >
             {c.fee === null ? "Add fee" : rupees(c.fee)}

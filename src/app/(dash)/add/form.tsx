@@ -118,7 +118,7 @@ export function AddForm({
     <form
       onSubmit={submit}
       noValidate
-      className="grid gap-4 lg:grid-flow-dense lg:grid-cols-2 lg:items-start"
+      className="grid gap-4 lg:grid-cols-2 lg:items-start"
     >
       {note && (
         <output
@@ -132,7 +132,7 @@ export function AddForm({
       )}
 
       <section
-        className="card card-pad grid gap-4 lg:col-start-1 lg:row-span-2"
+        className="card card-pad grid gap-4 lg:col-start-1"
         aria-label="Patient"
       >
         <label className="grid gap-1.5">
@@ -255,7 +255,7 @@ export function AddForm({
       </section>
 
       <section
-        className="card card-pad flex flex-col gap-4 lg:col-start-2 lg:max-h-[calc(100dvh-420px)] lg:min-h-80"
+        className="card card-pad flex flex-col gap-4 lg:col-start-2 lg:max-h-[calc(100dvh-230px)]"
         aria-labelledby="time-h"
       >
         <div className="flex items-baseline justify-between">
@@ -307,7 +307,7 @@ export function AddForm({
         </button>
       </section>
       <section
-        className="card card-pad grid content-start gap-2 lg:col-start-2"
+        className="card card-pad grid content-start gap-2 lg:col-span-2"
         aria-label="Already booked today"
       >
         <p className="eyebrow">Already booked today ({bookings.length})</p>
