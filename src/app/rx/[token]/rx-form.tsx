@@ -241,10 +241,16 @@ export function RxForm(p: {
       </main>
     );
 
+  // On the dashboard (doneHref set) the form uses the desk look and two columns.
+  const desk = !!p.doneHref;
   return (
-    <main className="rx-shell min-h-dvh px-4 pb-32 pt-6">
-      <div className="mx-auto grid max-w-xl gap-5">
-        <header className="grid gap-1">
+    <main
+      className={`rx-shell min-h-dvh px-4 pt-6 ${desk ? "rx-desk pb-32 lg:pb-8" : "pb-32"}`}
+    >
+      <div
+        className={`mx-auto grid gap-5 ${desk ? "max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start" : "max-w-xl"}`}
+      >
+        <header className={`grid gap-1 ${desk ? "lg:col-span-2" : ""}`}>
           {p.doneHref && (
             <a
               href={p.doneHref}
@@ -254,7 +260,13 @@ export function RxForm(p: {
             </a>
           )}
           <p className="rx-label">{p.clinic}</p>
-          <h1 className="rx-display text-[26px] leading-tight">
+          <h1
+            className={
+              desk
+                ? "page-title display"
+                : "rx-display text-[26px] leading-tight"
+            }
+          >
             Prescription for {p.patient}
           </h1>
           <p className="text-[14px] text-[var(--rx-muted)]">
@@ -262,199 +274,220 @@ export function RxForm(p: {
           </p>
         </header>
 
-        <datalist id={listId}>
-          {p.suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
+        <div className="grid min-w-0 gap-5">
+          <datalist id={listId}>
+            {p.suggestions.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
 
-        <ol className="grid gap-3">
-          {rows.map((r, idx) => (
-            <li key={r.key} className="rx-card grid gap-3 p-4">
-              <div className="flex items-center gap-2">
-                <span className="rx-num">{idx + 1}</span>
-                <input
-                  id={`med-${r.key}`}
-                  ref={(el) => {
-                    if (el) nameRefs.current.set(r.key, el);
-                    else nameRefs.current.delete(r.key);
-                  }}
-                  list={listId}
-                  value={r.name}
-                  onChange={(e) => set(r.key, { name: e.target.value })}
-                  placeholder="Medicine name, e.g. Augmentin 625"
-                  aria-label={`Medicine ${idx + 1} name`}
-                  autoComplete="off"
-                  maxLength={80}
-                  className="rx-input min-w-0 flex-1"
-                />
-                {rows.length > 1 && (
+          <ol className="grid gap-3">
+            {rows.map((r, idx) => (
+              <li key={r.key} className="rx-card grid gap-3 p-4">
+                <div className="flex items-center gap-2">
+                  <span className="rx-num">{idx + 1}</span>
+                  <input
+                    id={`med-${r.key}`}
+                    ref={(el) => {
+                      if (el) nameRefs.current.set(r.key, el);
+                      else nameRefs.current.delete(r.key);
+                    }}
+                    list={listId}
+                    value={r.name}
+                    onChange={(e) => set(r.key, { name: e.target.value })}
+                    placeholder="Medicine name, e.g. Augmentin 625"
+                    aria-label={`Medicine ${idx + 1} name`}
+                    autoComplete="off"
+                    maxLength={80}
+                    className="rx-input min-w-0 flex-1"
+                  />
+                  {rows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRows((rs) => rs.filter((x) => x.key !== r.key))
+                      }
+                      className="rx-icon-btn"
+                      aria-label={`Remove medicine ${idx + 1}`}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <fieldset
+                  className="grid grid-cols-4 gap-2"
+                  aria-label="When to take it"
+                >
+                  {SLOTS.map((label, k) => {
+                    const on = !r.sos && r.slots[k];
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={r.sos}
+                        onClick={() =>
+                          set(r.key, {
+                            slots: r.slots.map((v, j) =>
+                              j === k ? !v : v,
+                            ) as Row["slots"],
+                          })
+                        }
+                        className={`rx-slot ${on ? "is-on" : ""}`}
+                      >
+                        <SlotIcon k={k} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
-                    onClick={() =>
-                      setRows((rs) => rs.filter((x) => x.key !== r.key))
-                    }
-                    className="rx-icon-btn"
-                    aria-label={`Remove medicine ${idx + 1}`}
+                    aria-pressed={r.sos}
+                    onClick={() => set(r.key, { sos: !r.sos })}
+                    className={`rx-slot ${r.sos ? "is-sand" : ""}`}
                   >
-                    ✕
+                    <span className="text-[15px] font-bold">SOS</span>
+                    <span>When needed</span>
                   </button>
-                )}
-              </div>
-
-              <fieldset
-                className="grid grid-cols-4 gap-2"
-                aria-label="When to take it"
-              >
-                {SLOTS.map((label, k) => {
-                  const on = !r.sos && r.slots[k];
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={r.sos}
-                      onClick={() =>
-                        set(r.key, {
-                          slots: r.slots.map((v, j) =>
-                            j === k ? !v : v,
-                          ) as Row["slots"],
-                        })
-                      }
-                      className={`rx-slot ${on ? "is-on" : ""}`}
-                    >
-                      <SlotIcon k={k} />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  aria-pressed={r.sos}
-                  onClick={() => set(r.key, { sos: !r.sos })}
-                  className={`rx-slot ${r.sos ? "is-sand" : ""}`}
-                >
-                  <span className="text-[15px] font-bold">SOS</span>
-                  <span>When needed</span>
-                </button>
-              </fieldset>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <fieldset className="rx-seg" aria-label="Food">
-                  {(["after", "before", "any"] as Food[]).map((f) => (
-                    <label key={f} className={r.food === f ? "is-on" : ""}>
-                      <input
-                        type="radio"
-                        name={`food-${r.key}`}
-                        className="sr-only"
-                        checked={r.food === f}
-                        onChange={() => set(r.key, { food: f })}
-                      />
-                      {f === "after"
-                        ? "After food"
-                        : f === "before"
-                          ? "Before food"
-                          : "Any time"}
-                    </label>
-                  ))}
                 </fieldset>
-                <label className="rx-select">
-                  <span className="sr-only">Days</span>
-                  <select
-                    value={r.days}
-                    onChange={(e) => set(r.key, { days: e.target.value })}
-                  >
-                    {DAYS.map((d) => (
-                      <option key={d}>{d}</option>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <fieldset className="rx-seg" aria-label="Food">
+                    {(["after", "before", "any"] as Food[]).map((f) => (
+                      <label key={f} className={r.food === f ? "is-on" : ""}>
+                        <input
+                          type="radio"
+                          name={`food-${r.key}`}
+                          className="sr-only"
+                          checked={r.food === f}
+                          onChange={() => set(r.key, { food: f })}
+                        />
+                        {f === "after"
+                          ? "After food"
+                          : f === "before"
+                            ? "Before food"
+                            : "Any time"}
+                      </label>
                     ))}
-                  </select>
-                </label>
-                {!r.sos && (
+                  </fieldset>
                   <label className="rx-select">
-                    <span className="sr-only">Tablets each time</span>
+                    <span className="sr-only">Days</span>
                     <select
-                      value={r.qty}
-                      onChange={(e) =>
-                        set(r.key, { qty: Number(e.target.value) })
-                      }
+                      value={r.days}
+                      onChange={(e) => set(r.key, { days: e.target.value })}
                     >
-                      {QTY.map((q) => (
-                        <option key={q} value={q}>
-                          {q === 0.5 ? "½" : q} tab
-                        </option>
+                      {DAYS.map((d) => (
+                        <option key={d}>{d}</option>
                       ))}
                     </select>
                   </label>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
+                  {!r.sos && (
+                    <label className="rx-select">
+                      <span className="sr-only">Tablets each time</span>
+                      <select
+                        value={r.qty}
+                        onChange={(e) =>
+                          set(r.key, { qty: Number(e.target.value) })
+                        }
+                      >
+                        {QTY.map((q) => (
+                          <option key={q} value={q}>
+                            {q === 0.5 ? "½" : q} tab
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
 
-        <button type="button" onClick={add} className="rx-add">
-          + Add medicine
-        </button>
+          <button type="button" onClick={add} className="rx-add">
+            + Add medicine
+          </button>
 
-        <label className="grid gap-1.5">
-          <span className="rx-label">Advice (optional)</span>
-          <textarea
-            id="advice"
-            value={advice}
-            onChange={(e) => setAdvice(e.target.value)}
-            rows={2}
-            maxLength={500}
-            placeholder="e.g. Drink plenty of water. Review after 5 days."
-            className="rx-input resize-y"
-          />
-        </label>
-
-        {p.fee !== undefined && (
           <label className="grid gap-1.5">
-            <span className="rx-label">Fee for this visit (₹)</span>
-            <input
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={fee}
-              onChange={(e) =>
-                setFee(e.target.value.replace(/\D/g, "").slice(0, 6))
-              }
-              className="rx-input"
-              aria-describedby="fee-help"
+            <span className="rx-label">Advice (optional)</span>
+            <textarea
+              id="advice"
+              value={advice}
+              onChange={(e) => setAdvice(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="e.g. Drink plenty of water. Review after 5 days."
+              className="rx-input resize-y"
             />
-            <span id="fee-help" className="text-[13px] text-[var(--rx-muted)]">
-              Your standard fee is filled in. Change it for this visit only,
-              e.g. 0 for a free follow-up.
-            </span>
           </label>
-        )}
+        </div>
 
-        {(p.preview || p.skip) && (
-          <div className="flex flex-wrap gap-2">
-            {p.preview && (
-              <button
-                type="button"
-                onClick={previewPdf}
-                disabled={busy}
-                className="rx-add"
+        <div
+          className={
+            desk ? "rx-card grid gap-4 p-5 lg:sticky lg:top-6" : "contents"
+          }
+        >
+          {p.fee !== undefined && (
+            <label className="grid gap-1.5">
+              <span className="rx-label">Fee for this visit (₹)</span>
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={fee}
+                onChange={(e) =>
+                  setFee(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                className="rx-input"
+                aria-describedby="fee-help"
+              />
+              <span
+                id="fee-help"
+                className="text-[13px] text-[var(--rx-muted)]"
               >
-                Preview PDF
-              </button>
-            )}
-            {p.skip && (
-              <button
-                type="button"
-                onClick={completeWithout}
-                disabled={busy}
-                className="rx-add"
-              >
-                Complete without prescription
-              </button>
-            )}
-          </div>
-        )}
+                Your standard fee is filled in. Change it for this visit only,
+                e.g. 0 for a free follow-up.
+              </span>
+            </label>
+          )}
+
+          {(p.preview || p.skip) && (
+            <div className="flex flex-wrap gap-2">
+              {p.preview && (
+                <button
+                  type="button"
+                  onClick={previewPdf}
+                  disabled={busy}
+                  className="rx-add"
+                >
+                  Preview PDF
+                </button>
+              )}
+              {p.skip && (
+                <button
+                  type="button"
+                  onClick={completeWithout}
+                  disabled={busy}
+                  className="rx-add"
+                >
+                  Complete without prescription
+                </button>
+              )}
+            </div>
+          )}
+          {desk && (
+            <button
+              type="button"
+              onClick={send}
+              disabled={busy}
+              className="rx-send hidden lg:block"
+            >
+              {busy ? "Sending…" : "Complete and send"}
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="rx-bar">
+      <div className={`rx-bar ${desk ? "lg:hidden" : ""}`}>
         <div className="mx-auto flex max-w-xl items-center gap-3">
           <output className="block min-w-0 flex-1 text-[13px] leading-snug text-[var(--rx-muted)]">
             {error ? (

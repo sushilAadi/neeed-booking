@@ -540,6 +540,36 @@ body {
   }
 }
 
+/* Same form inside the dashboard (Mark complete): desk palette, no paper. */
+.rx-shell.rx-desk {
+  --rx-paper: var(--sunk);
+  --rx-card: var(--surface);
+  --rx-ink: var(--ink);
+  --rx-muted: var(--muted);
+  --rx-line: var(--line);
+  --rx-green: var(--accent);
+  --rx-green-tint: var(--accent-soft);
+  --rx-sand: var(--wait-soft);
+  --rx-sand-ink: var(--wait);
+  --rx-warn: var(--danger);
+  background: transparent;
+  font-family: inherit;
+}
+.rx-desk .rx-card {
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.rx-desk .rx-send,
+.rx-desk .rx-add {
+  border-radius: 999px;
+}
+.rx-desk .rx-send {
+  color: var(--accent-ink);
+}
+.rx-desk .rx-bar {
+  background: var(--glass);
+}
+
 @layer components {
   /* Sheets (native <dialog>) */
   .sheet {
