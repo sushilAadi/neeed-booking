@@ -23,7 +23,7 @@ const on = (path: string, href: string) =>
   path === href || path.startsWith(`${href}/`);
 
 /** Round icon rail from 768 px; frosted bottom tab bar on phones. */
-export function Nav() {
+export function Nav(p: { logoUrl: string | null; clinic: string }) {
   const path = usePathname();
   return (
     <>
@@ -33,10 +33,20 @@ export function Nav() {
       >
         <Link
           href="/today"
-          className="display mb-4 text-[22px] font-bold tracking-tight"
-          aria-label="Neeed home"
+          className="display mb-4 grid size-12 place-items-center overflow-hidden rounded-2xl text-[22px] font-bold tracking-tight"
+          aria-label={`${p.clinic} — Today`}
         >
-          n<span className="text-wait">.</span>
+          {p.logoUrl ? (
+            <img
+              src={p.logoUrl}
+              alt=""
+              className="size-full bg-surface object-contain p-1"
+            />
+          ) : (
+            <span>
+              n<span className="text-wait">.</span>
+            </span>
+          )}
         </Link>
         <ul className="flex flex-col gap-3">
           {TABS.map(({ href, label, Icon }) => (

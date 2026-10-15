@@ -10,6 +10,8 @@ export type Doctor = {
   personalPhone: string;
   registrationNumber: string | null;
   signaturePath: string | null;
+  /** Clinic logo in the signatures bucket, shown in the dashboard menu. */
+  logoPath: string | null;
   workingDays: number[];
   /** "HH:MM" IST; a period whose start/end are null is Off. */
   morningStart: string | null;
@@ -142,6 +144,7 @@ export interface Store {
         | "address"
         | "clinicName"
         | "name"
+        | "logoPath"
       >
     > &
       HoursPatch,

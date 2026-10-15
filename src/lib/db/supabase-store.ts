@@ -33,6 +33,7 @@ const toDoctor = (r: Row): Doctor => ({
   hoursSet: r.hours_set,
   standardFee: r.standard_fee ?? 0,
   address: r.address ?? null,
+  logoPath: r.logo_path ?? null,
 });
 
 const DOCTOR_COLS: Record<string, string> = {
@@ -52,6 +53,7 @@ const DOCTOR_COLS: Record<string, string> = {
   address: "address",
   clinicName: "clinic_name",
   name: "name",
+  logoPath: "logo_path",
 };
 
 const toAppointment = (r: Row): Appointment => ({

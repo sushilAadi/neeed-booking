@@ -27,6 +27,7 @@ import {
   saveClinicAction,
   saveFeeAction,
   saveHoursAction,
+  saveLogoAction,
   saveRxSetupAction,
 } from "./actions";
 
@@ -773,7 +774,10 @@ export function ClinicDetails(p: {
   name: string;
   address: string;
   phone: string;
+  logoUrl: string | null;
 }) {
+  const [logo, setLogo] = useState(p.logoUrl);
+  const [logoErr, setLogoErr] = useState("");
   const [f, setF] = useState({
     clinicName: p.clinicName,
     name: p.name.replace(/^Dr\.?\s*/i, ""),
@@ -811,6 +815,55 @@ export function ClinicDetails(p: {
       title="Clinic details"
       hint="Shown at the top of the dashboard and printed on every prescription."
     >
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-line bg-surface">
+          {logo ? (
+            <img
+              src={logo}
+              alt="Clinic logo"
+              className="size-full object-contain p-1"
+            />
+          ) : (
+            <span className="display text-2xl font-bold">
+              n<span className="text-wait">.</span>
+            </span>
+          )}
+        </span>
+        <div className="grid gap-1">
+          <label className="btn btn-ghost btn-sm cursor-pointer">
+            {logo ? "Change logo" : "Upload logo"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                if (file.size > 1024 * 1024)
+                  return setLogoErr(
+                    "That image is over 1 MB. Pick a smaller one.",
+                  );
+                const fd = new FormData();
+                fd.set("logo", file);
+                start(async () => {
+                  const r = await saveLogoAction(fd);
+                  setLogoErr(r.ok ? "" : r.message);
+                  if (r.ok) {
+                    setLogo(URL.createObjectURL(file));
+                    say(r.message);
+                  }
+                });
+              }}
+            />
+          </label>
+          <span className="text-[13px] text-muted">
+            Shown in the menu instead of the Neeed mark. PNG, JPG or WebP, up to
+            1 MB.
+          </span>
+          <Err id="logo-err" text={logoErr} />
+        </div>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {field("clinicName", "Clinic name", "Rao Family Clinic", 80)}
         {field("name", "Your name (as printed)", "Asha Rao", 70)}

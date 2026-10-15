@@ -9,7 +9,12 @@ export default async function DashLayout({
   children: React.ReactNode;
 }) {
   const { doctor, staff, store, now } = await requireStaff();
-  const closed = await store.isClosed(doctor.id, today(now).date);
+  const [closed, logoUrl] = await Promise.all([
+    store.isClosed(doctor.id, today(now).date),
+    doctor.logoPath
+      ? store.signedUrl("signatures", doctor.logoPath).catch(() => null)
+      : null,
+  ]);
   const who = staff.role === "doctor" ? doctor.name : staff.name;
   const initials = who
     .replace(/^Dr\.?\s*/i, "")
@@ -20,15 +25,24 @@ export default async function DashLayout({
     .toUpperCase();
   return (
     <div className="min-h-dvh md:flex">
-      <Nav />
+      <Nav logoUrl={logoUrl} clinic={doctor.clinicName} />
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 pt-[env(safe-area-inset-top)] glass border-b md:border-b-0 md:bg-transparent md:[backdrop-filter:none]">
-          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-3 md:px-8 md:pt-6 md:pb-2">
-            <div className="min-w-0">
-              <p className="display truncate text-[17px] font-bold md:text-[19px]">
-                {doctor.clinicName}
-              </p>
-              <p className="truncate text-[13px] text-muted">{fmtDay(now)}</p>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8 md:pt-6 md:pb-2">
+            <div className="flex min-w-0 items-center gap-3">
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt=""
+                  className="size-10 shrink-0 rounded-xl border border-line bg-surface object-contain p-0.5 md:hidden"
+                />
+              )}
+              <div className="min-w-0">
+                <p className="display truncate text-[17px] font-bold md:text-[19px]">
+                  {doctor.clinicName}
+                </p>
+                <p className="truncate text-[13px] text-muted">{fmtDay(now)}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
               <span className="badge badge-done py-2 sm:hidden">
@@ -57,9 +71,7 @@ export default async function DashLayout({
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-4 pt-4 pb-32 md:px-8 md:pb-8">
-          {children}
-        </main>
+        <main className="px-4 pt-4 pb-32 md:px-8 md:pb-8">{children}</main>
       </div>
     </div>
   );

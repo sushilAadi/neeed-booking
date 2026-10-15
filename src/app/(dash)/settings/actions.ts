@@ -20,6 +20,7 @@ import {
 } from "@/lib/clinic/availability";
 import { saveClinicDetails } from "@/lib/clinic/details";
 import { addReceptionist, reissueKey, removeStaff } from "@/lib/clinic/staff";
+import { imageType } from "@/lib/images";
 import { PERIODS, type Period, periodHours, type Range } from "@/lib/slots";
 import { addDays } from "@/lib/time";
 import { deliver } from "@/lib/wa/deliver";
@@ -111,11 +112,6 @@ export async function blockAction(
   };
 }
 
-const IMG = {
-  png: [0x89, 0x50, 0x4e, 0x47],
-  jpg: [0xff, 0xd8, 0xff],
-} as const;
-
 /** Registration number and signature: the doctor's own, so doctor only. */
 export async function saveRxSetupAction(form: FormData): Promise<Result> {
   const s = await requireDoctorRole();
@@ -133,11 +129,10 @@ export async function saveRxSetupAction(form: FormData): Promise<Result> {
         message: "That image is over 2 MB. Pick a smaller one.",
       };
     const bytes = new Uint8Array(await file.arrayBuffer());
-    // Trust the bytes, not the file name or browser-sent type.
-    const ext = (Object.keys(IMG) as (keyof typeof IMG)[]).find((k) =>
-      IMG[k].every((b, i) => bytes[i] === b),
-    );
-    if (!ext) return { ok: false, message: "Use a PNG or JPG photo." };
+    const img = imageType(bytes);
+    if (!img || img.ext === "webp")
+      return { ok: false, message: "Use a PNG or JPG photo." };
+    const ext = img.ext;
     const path = `${s.doctor.id}.${ext}`;
     await s.store.putFile(
       "signatures",
@@ -258,4 +253,33 @@ export async function saveClinicAction(input: {
   );
   if (r.ok) revalidatePath("/", "layout");
   return r;
+}
+
+/** Clinic logo for the dashboard menu — doctor only; PNG, JPG or WebP up to 1 MB. */
+export async function saveLogoAction(form: FormData): Promise<Result> {
+  const s = await requireDoctorRole();
+  const file = form.get("logo");
+  if (!(file instanceof File) || !file.size)
+    return { ok: false, message: "Pick an image first." };
+  if (file.size > 1024 * 1024)
+    return {
+      ok: false,
+      message: "That image is over 1 MB. Pick a smaller one.",
+    };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const img = imageType(bytes);
+  if (!img) return { ok: false, message: "Use a PNG, JPG or WebP image." };
+  const path = `logo-${s.doctor.id}-${s.now.getTime()}.${img.ext}`;
+  await s.store.putFile("signatures", path, bytes, img.mime);
+  await s.store.updateDoctor(s.doctor.id, { logoPath: path });
+  await record(
+    s.store,
+    s.doctor.id,
+    s.actor,
+    "clinic_changed",
+    { detail: { logo: true } },
+    s.now,
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Logo saved." };
 }

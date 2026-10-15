@@ -38,6 +38,9 @@ export default async function Page() {
     };
   });
   const people = isDoctor ? await store.listStaff(doctor.id) : [];
+  const logoUrl = doctor.logoPath
+    ? await store.signedUrl("signatures", doctor.logoPath).catch(() => null)
+    : null;
   const sigUrl =
     isDoctor && doctor.signaturePath
       ? await store
@@ -58,6 +61,7 @@ export default async function Page() {
             name={doctor.name}
             address={doctor.address ?? ""}
             phone={fmtPhone(doctor.personalPhone)}
+            logoUrl={logoUrl}
           />
         )}
         <Hours

@@ -24,6 +24,7 @@ const doc: Doctor = {
   hoursSet: true,
   standardFee: 0,
   address: null,
+  logoPath: null,
 };
 const newApt: NewAppointment = {
   doctorId: "d1",

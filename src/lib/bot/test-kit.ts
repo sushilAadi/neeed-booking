@@ -23,6 +23,7 @@ export const DOC: Doctor = {
   hoursSet: true,
   standardFee: 0,
   address: null,
+  logoPath: null,
 };
 export const NOW = atIst("2026-07-30", "09:00");
 
