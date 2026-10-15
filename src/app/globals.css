@@ -108,6 +108,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+@layer base {
+  /* Tailwind v4 borders default to currentColor; ours are hairlines. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--line);
+  }
+}
+
 @layer components {
   .card {
     background: var(--surface);

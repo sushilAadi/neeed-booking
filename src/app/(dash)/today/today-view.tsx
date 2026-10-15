@@ -1,15 +1,19 @@
 "use client";
 
+import { Morph, Rise } from "cube-motion/react";
 import {
   Ban,
   CheckCircle2,
+  Clock,
   IndianRupee,
   Phone,
   Search,
   Stethoscope,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { PageHead } from "@/components/page-head";
 import { Sheet } from "@/components/sheet";
 import type { Gender, Source, Status } from "@/lib/db/types";
 import { cancelAction, feeAction, setClosedAction } from "./actions";
@@ -91,115 +95,193 @@ export function TodayView(p: {
       setTimeout(() => setToast(""), 3500);
     });
 
-  return (
-    <div className="grid gap-5">
-      <section
-        aria-label="Today at a glance"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-      >
-        <Stat label="Waiting" value={String(p.stats.waiting)} tone="wait" />
-        <Stat label="Done" value={String(p.stats.done)} tone="ok" />
-        <Stat
-          label="Cancelled"
-          value={String(p.stats.cancelled)}
-          tone="muted"
-        />
-        <Stat label="Collected" value={rupees(p.stats.collection)} tone="ink" />
-      </section>
+  const [period, setPeriod] = useState<Card["group"] | "all">("all");
+  const listed = shown.filter((c) => period === "all" || c.group === period);
+  const next = p.cards.find((c) => c.status === "CONFIRMED");
+  const periods = GROUPS.filter(([g]) => p.cards.some((c) => c.group === g));
 
-      <div className="card flex items-center justify-between gap-3 p-4">
-        <div>
-          <p className="font-bold">
-            {p.closed ? "Closed today" : "Taking bookings today"}
-          </p>
-          <p className="text-sm text-muted">
-            {p.closed
-              ? "WhatsApp tells patients you're not booking today."
-              : "Patients can book free times on WhatsApp."}
-          </p>
-        </div>
+  return (
+    <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
+      <PageHead eyebrow="Your clinic desk for today" title="Today">
         <button
           type="button"
           role="switch"
           aria-checked={!p.closed}
-          aria-label="Taking bookings today"
           disabled={busy}
           onClick={() => run(() => setClosedAction(!p.closed, null))}
-          className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${
-            p.closed ? "border-line bg-sunk" : "border-accent bg-accent"
-          }`}
+          className="btn btn-ghost btn-sm gap-3"
         >
+          <Morph active={p.closed} off="Taking bookings" on="Closed today" />
           <span
-            className={`absolute top-1 size-6 rounded-full bg-surface shadow transition-transform ${
-              p.closed ? "left-1" : "left-1 translate-x-6"
-            }`}
-          />
+            aria-hidden
+            className={`relative h-6 w-10 rounded-full transition-colors ${p.closed ? "bg-sunk" : "bg-accent"}`}
+          >
+            <span
+              className={`absolute top-1 left-1 size-4 rounded-full bg-surface shadow transition-transform ${p.closed ? "" : "translate-x-4"}`}
+            />
+          </span>
         </button>
-      </div>
+        <Link href="/add" className="btn btn-primary btn-sm">
+          <UserPlus size={18} strokeWidth={1.75} aria-hidden /> Add patient
+        </Link>
+      </PageHead>
 
-      <label className="relative block">
-        <span className="sr-only">Search by name or number</span>
-        <Search
-          size={18}
-          className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
-          aria-hidden
+      <Rise
+        as="section"
+        targets="children"
+        aria-label="Today at a glance"
+        className="grid grid-cols-2 gap-4 lg:grid-cols-4"
+      >
+        <Stat
+          label="Waiting"
+          value={String(p.stats.waiting)}
+          Icon={Clock}
+          tone="wait"
         />
-        <input
-          type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name or number"
-          className="field pl-11"
+        <Stat
+          label="Done"
+          value={String(p.stats.done)}
+          Icon={CheckCircle2}
+          tone="done"
         />
-      </label>
+        <Stat
+          label="Cancelled"
+          value={String(p.stats.cancelled)}
+          Icon={Ban}
+          tone="cancel"
+        />
+        <Stat
+          label="Collected"
+          value={rupees(p.stats.collection)}
+          Icon={IndianRupee}
+          tone="money"
+        />
+      </Rise>
 
-      {!p.cards.length ? (
-        <div className="card grid place-items-center gap-3 p-10 text-center">
-          <Stethoscope className="text-accent" size={28} aria-hidden />
-          <p className="font-bold">No patients yet today</p>
-          <p className="max-w-xs text-sm text-muted">
-            Add a patient who called, or share your WhatsApp number so patients
-            can book themselves.
-          </p>
-          <Link href="/add" className="btn btn-primary mt-2">
-            Add patient
-          </Link>
-        </div>
-      ) : (
-        GROUPS.map(([g, title]) => {
-          const list = shown.filter((c) => c.group === g);
-          if (!list.length) return null;
-          const waiting = list.filter((c) => c.status === "CONFIRMED").length;
-          return (
-            <section key={g} aria-labelledby={`g-${g}`} className="grid gap-3">
-              <h2
-                id={`g-${g}`}
-                className="eyebrow flex items-baseline justify-between"
-              >
-                <span>{title}</span>
-                <span className="normal-case tracking-normal">
-                  {waiting} waiting · {list.length} total
-                </span>
-              </h2>
-              <ol className="grid gap-3">
-                {list.map((c) => (
-                  <PatientCard
-                    key={c.id}
-                    c={c}
-                    onCancel={() => setPending({ kind: "cancel", card: c })}
-                    onFee={() => setPending({ kind: "fee", card: c })}
-                  />
+      <Rise
+        targets="children"
+        delay={120}
+        className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]"
+      >
+        <section
+          aria-labelledby="queue-h"
+          className="card card-pad flex min-h-0 flex-col gap-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="queue-h" className="display text-[22px] font-medium">
+              Queue
+              <span className="ml-2 text-[15px] text-muted">
+                {p.stats.waiting} waiting · {p.cards.length} total
+              </span>
+            </h2>
+            {periods.length > 1 && (
+              <fieldset className="flex flex-wrap gap-2">
+                <legend className="sr-only">Part of day</legend>
+                {[["all", "All"] as const, ...periods].map(([g, t]) => (
+                  <button
+                    key={g}
+                    type="button"
+                    className="pill"
+                    aria-pressed={period === g}
+                    onClick={() => setPeriod(g)}
+                  >
+                    {t}
+                  </button>
                 ))}
-              </ol>
-            </section>
-          );
-        })
-      )}
-      {p.cards.length > 0 && !shown.length && (
-        <p className="text-center text-sm text-muted">
-          No patient matches “{q}”.
-        </p>
-      )}
+              </fieldset>
+            )}
+          </div>
+          <label className="relative block">
+            <span className="sr-only">Search by name or number</span>
+            <Search
+              size={18}
+              className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-muted"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by name or number"
+              className="field pl-11"
+            />
+          </label>
+          {!p.cards.length ? (
+            <div className="grid flex-1 place-items-center gap-3 p-8 text-center">
+              <Stethoscope className="text-muted" size={28} aria-hidden />
+              <p className="font-semibold">No patients yet today</p>
+              <p className="max-w-xs text-sm text-muted">
+                Add a patient who called, or share your WhatsApp number so
+                patients can book themselves.
+              </p>
+            </div>
+          ) : (
+            <ol className="scroll-area -mx-2 grid content-start gap-2 px-2 lg:flex-1">
+              {listed.map((c) => (
+                <Row
+                  key={c.id}
+                  c={c}
+                  onCancel={() => setPending({ kind: "cancel", card: c })}
+                  onFee={() => setPending({ kind: "fee", card: c })}
+                />
+              ))}
+              {!listed.length && (
+                <li className="p-6 text-center text-sm text-muted">
+                  No patient matches “{q}”.
+                </li>
+              )}
+            </ol>
+          )}
+        </section>
+
+        <div className="grid min-h-0 content-start gap-4">
+          <section
+            aria-labelledby="next-h"
+            className="card card-pad grid gap-4"
+          >
+            <h2 id="next-h" className="eyebrow">
+              Next patient
+            </h2>
+            {next ? (
+              <>
+                <div className="flex items-center gap-4">
+                  <span className="grid size-14 shrink-0 place-items-center rounded-full bg-wait-soft text-[17px] font-bold text-wait">
+                    {next.time.replace(/ (AM|PM)$/, "")}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="display truncate text-[20px] font-medium">
+                      {next.name}
+                    </p>
+                    <p className="truncate text-sm text-muted">
+                      {[facts(next), next.reason].filter(Boolean).join(" · ") ||
+                        next.time}
+                    </p>
+                  </div>
+                </div>
+                <Link href={`/visit/${next.id}`} className="btn btn-primary">
+                  <CheckCircle2 size={18} strokeWidth={1.75} aria-hidden /> Mark
+                  complete
+                </Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted">Nobody waiting right now.</p>
+            )}
+          </section>
+          <section
+            aria-labelledby="ring-h"
+            className="card card-pad grid gap-2"
+          >
+            <h2 id="ring-h" className="eyebrow">
+              Today's visits
+            </h2>
+            <Ring
+              waiting={p.stats.waiting}
+              done={p.stats.done}
+              cancelled={p.stats.cancelled}
+            />
+          </section>
+        </div>
+      </Rise>
 
       <Sheet
         open={pending?.kind === "close"}
@@ -217,7 +299,7 @@ export function TodayView(p: {
             disabled={busy}
             onClick={() => run(() => setClosedAction(true, "cancel"))}
           >
-            Cancel them & tell patients
+            Cancel them and tell patients
           </button>
           <button
             type="button"
@@ -245,129 +327,186 @@ export function TodayView(p: {
         onSave={(id, fee) => run(() => feeAction(id, fee))}
       />
 
-      <output
-        aria-live="polite"
-        className={`fixed inset-x-4 bottom-24 z-40 mx-auto max-w-md rounded-2xl bg-ink px-4 py-3 text-center text-[15px] font-semibold text-bg shadow-lg transition-all md:bottom-8 ${
-          toast
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-3 opacity-0"
-        }`}
+      <Rise
+        show={!!toast}
+        className="pointer-events-none fixed inset-x-4 bottom-28 z-40 mx-auto max-w-md md:bottom-8"
       >
-        {toast}
-      </output>
+        <output
+          aria-live="polite"
+          className="block rounded-full bg-ink px-5 py-3 text-center text-[15px] font-semibold text-bg shadow-lg"
+        >
+          {toast}
+        </output>
+      </Rise>
     </div>
   );
 }
+
+const facts = (c: Card) =>
+  [c.age !== null ? `${c.age} y` : null, c.gender ? GENDER[c.gender] : null]
+    .filter(Boolean)
+    .join(" · ");
+
+const TONE = {
+  wait: "bg-wait-soft text-wait",
+  done: "bg-done-soft text-done",
+  cancel: "bg-danger-soft text-danger",
+  money: "bg-ok-soft text-ok",
+} as const;
 
 function Stat(p: {
   label: string;
   value: string;
-  tone: "wait" | "ok" | "muted" | "ink";
+  Icon: typeof Clock;
+  tone: keyof typeof TONE;
 }) {
-  const color = {
-    wait: "text-wait",
-    ok: "text-ok",
-    muted: "text-muted",
-    ink: "text-ink",
-  }[p.tone];
   return (
-    <div className="card px-4 py-3">
-      <p className="eyebrow">{p.label}</p>
-      <p className={`display mt-1 text-[28px] leading-none font-bold ${color}`}>
-        {p.value}
-      </p>
+    <div className="card lift flex items-center gap-4 p-4 md:p-5">
+      <span
+        className={`grid size-11 shrink-0 place-items-center rounded-full ${TONE[p.tone]}`}
+      >
+        <p.Icon size={20} strokeWidth={1.75} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold text-muted">{p.label}</p>
+        <p className="display truncate text-[26px] leading-tight font-medium">
+          {p.value}
+        </p>
+      </div>
     </div>
   );
 }
 
-function PatientCard(p: { c: Card; onCancel: () => void; onFee: () => void }) {
+function Ring(p: { waiting: number; done: number; cancelled: number }) {
+  const total = p.waiting + p.done + p.cancelled;
+  const parts = [
+    { label: "Waiting", n: p.waiting, color: "var(--wait-fill)" },
+    { label: "Done", n: p.done, color: "var(--done-fill)" },
+    { label: "Cancelled", n: p.cancelled, color: "var(--danger)" },
+  ];
+  // SVG ring: one stroked circle per part, offset along the circumference.
+  const C = 2 * Math.PI * 42;
+  let at = 0;
+  return (
+    <div className="flex items-center gap-5">
+      <svg
+        viewBox="0 0 100 100"
+        className="size-28 shrink-0 -rotate-90"
+        role="img"
+        aria-label={`${p.done} done, ${p.waiting} waiting, ${p.cancelled} cancelled`}
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r="42"
+          fill="none"
+          stroke="var(--sunk)"
+          strokeWidth="12"
+        />
+        {total > 0 &&
+          parts.map((x) => {
+            const len = (x.n / total) * C;
+            const el = (
+              <circle
+                key={x.label}
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke={x.color}
+                strokeWidth="12"
+                strokeDasharray={`${len} ${C - len}`}
+                strokeDashoffset={-at}
+              />
+            );
+            at += len;
+            return el;
+          })}
+      </svg>
+      <ul className="grid gap-2 text-sm">
+        {parts.map((x) => (
+          <li key={x.label} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-2.5 rounded-full"
+              style={{ background: x.color }}
+            />
+            {x.label}
+            <span className="font-semibold">{x.n}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Row(p: { c: Card; onCancel: () => void; onFee: () => void }) {
   const { c } = p;
   const done = c.status === "COMPLETED";
   const off = c.status === "CANCELLED";
-  const facts = [
-    c.age !== null ? `${c.age} y` : null,
-    c.gender ? GENDER[c.gender] : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
   return (
-    <li className="card token overflow-visible">
-      <div className="token-stub">
-        <p className="display text-[19px] leading-tight font-bold">
+    <li className="inner lift grid grid-cols-[64px_minmax(0,1fr)] items-center gap-3 p-3 sm:grid-cols-[72px_minmax(0,1fr)_auto]">
+      <div className="text-center">
+        <p className="display text-[18px] leading-tight font-medium">
           {c.time.replace(/ (AM|PM)$/, "")}
         </p>
         <p className="text-[12px] font-semibold text-muted">
           {c.time.slice(-2)}
         </p>
       </div>
-      <div className="grid min-w-0 gap-2 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p
-              className={`truncate text-[17px] font-bold ${off ? "text-muted line-through" : ""}`}
-            >
-              {c.name}
-            </p>
-            <p className="truncate text-sm text-muted">
-              {[facts, c.reason].filter(Boolean).join(" · ") || "No details"}
-            </p>
-          </div>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p
+            className={`truncate font-semibold ${off ? "text-muted line-through" : ""}`}
+          >
+            {c.name}
+          </p>
           <StatusBadge status={c.status} />
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+        <p className="truncate text-[13px] text-muted">
+          {[facts(c), c.reason].filter(Boolean).join(" · ") || "No details"}
+        </p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[13px] text-muted">
           <a
             href={`tel:+${c.phone}`}
             className="inline-flex min-h-8 items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline"
           >
             <Phone size={14} aria-hidden /> {phoneText(c.phone)}
           </a>
-          <span>
-            {c.source === "whatsapp" ? "📱 WhatsApp" : "🏥 Reception"}
-          </span>
+          <span>{c.source === "whatsapp" ? "WhatsApp" : "Reception"}</span>
           {done && c.completedBy ? (
             <span>Completed by {c.completedBy}</span>
           ) : c.createdBy && c.source === "reception" ? (
             <span>Added by {c.createdBy}</span>
           ) : null}
-        </div>
+        </p>
+      </div>
+      <div className="col-span-2 flex justify-end gap-2 sm:col-span-1">
         {c.status === "CONFIRMED" && (
-          <div className="mt-1 flex gap-2">
-            <Link
-              href={`/visit/${c.id}`}
-              className="btn btn-primary btn-sm flex-1"
-            >
-              <CheckCircle2 size={18} aria-hidden /> Mark complete
+          <>
+            <Link href={`/visit/${c.id}`} className="btn btn-primary btn-sm">
+              <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden /> Complete
             </Link>
             <button
               type="button"
               onClick={p.onCancel}
-              className="btn btn-ghost btn-sm"
+              className="btn-icon"
               aria-label={`Cancel ${c.name}'s visit`}
             >
-              <Ban size={18} aria-hidden />
-              <span className="hidden sm:inline">Cancel</span>
+              <Ban size={18} strokeWidth={1.75} aria-hidden />
             </button>
-          </div>
+          </>
         )}
         {done && (
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <p className="text-sm">
-              Fee{" "}
-              <span className="display text-base font-bold">
-                {c.fee === null ? "—" : rupees(c.fee)}
-              </span>
-              {c.hasRx ? (
-                <span className="text-muted"> · prescription sent</span>
-              ) : null}
-            </p>
-            <button
-              type="button"
-              onClick={p.onFee}
-              className="btn btn-ghost btn-sm"
-            >
-              <IndianRupee size={16} aria-hidden /> Edit fee
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={p.onFee}
+            className="btn btn-ghost btn-sm"
+            aria-label={`${c.fee === null ? "Add fee" : rupees(c.fee)}, edit fee for ${c.name}`}
+          >
+            {c.fee === null ? "Add fee" : rupees(c.fee)}
+            <IndianRupee size={14} aria-hidden />
+          </button>
         )}
       </div>
     </li>
@@ -375,18 +514,12 @@ function PatientCard(p: { c: Card; onCancel: () => void; onFee: () => void }) {
 }
 
 function StatusBadge({ status }: { status: Status }) {
-  const s = {
-    CONFIRMED: ["Waiting", "bg-wait-soft text-wait"],
-    COMPLETED: ["Done", "bg-ok-soft text-ok"],
-    CANCELLED: ["Cancelled", "bg-danger-soft text-danger"],
+  const [t, cls] = {
+    CONFIRMED: ["Waiting", "badge-wait"],
+    COMPLETED: ["Done", "badge-done"],
+    CANCELLED: ["Cancelled", "badge-cancel"],
   }[status];
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold ${s[1]}`}
-    >
-      {s[0]}
-    </span>
-  );
+  return <span className={`badge shrink-0 ${cls}`}>{t}</span>;
 }
 
 function CancelSheet(p: {
@@ -410,7 +543,7 @@ function CancelSheet(p: {
           value={reason}
           maxLength={200}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Doctor called to an emergency"
+          placeholder="Doctor called to an emergency"
         />
       </label>
       <p className="text-sm text-muted">

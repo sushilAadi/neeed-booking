@@ -22,7 +22,7 @@ export default async function DashLayout({
     <div className="min-h-dvh md:flex">
       <Nav />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 pt-[env(safe-area-inset-top)] max-md:glass max-md:border-b">
+        <header className="sticky top-0 z-20 pt-[env(safe-area-inset-top)] glass border-b md:border-b-0 md:bg-transparent md:[backdrop-filter:none]">
           <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-3 md:px-8 md:pt-6 md:pb-2">
             <div className="min-w-0">
               <p className="display truncate text-[17px] font-bold md:text-[19px]">
