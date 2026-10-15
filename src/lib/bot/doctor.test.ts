@@ -841,3 +841,14 @@ test("hours: edit question Back → hours menu; setup Back → previous question
   expect(ids(second[0])).toEqual(["keep", "off", "back"]);
   expect(bodies(await run(s2, r("back")))[0]).toContain("Morning hours?");
 });
+
+test("setup: a command or menu word is not saved as the registration number", async () => {
+  const fresh = { ...DOC, registrationNumber: null, signaturePath: null };
+  const s = createMemoryStore({ doctors: [fresh] });
+  await run(s, t("hi"), fresh);
+  for (const bad of ["/menu", "menu", "hi", "back", "/start"]) {
+    const r = bodies(await run(s, t(bad), fresh));
+    expect(r[0]).toMatch(/registration number/);
+  }
+  expect((await s.doctorByPersonalPhone(D))?.registrationNumber).toBe(null);
+});

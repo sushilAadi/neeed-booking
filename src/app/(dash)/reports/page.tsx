@@ -18,6 +18,22 @@ export const metadata: Metadata = { title: "Reports" };
 
 const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
+const KIND: Record<string, [string, string]> = {
+  booked: ["Booking", "badge-wait"],
+  completed: ["Visit done", "badge-done"],
+  cancelled: ["Cancelled", "badge-cancel"],
+  fee_changed: ["Fee", "badge-money"],
+  fee_default_changed: ["Fee", "badge-money"],
+  closed_today: ["Clinic", "badge-cancel"],
+  opened_today: ["Clinic", "badge-money"],
+  blocked: ["Clinic", "badge-cancel"],
+  hours_changed: ["Settings", "badge-done"],
+  rx_setup_changed: ["Settings", "badge-done"],
+  staff_added: ["Staff", "badge-done"],
+  staff_removed: ["Staff", "badge-cancel"],
+  key_reissued: ["Staff", "badge-done"],
+};
+
 /** One plain sentence per activity row. */
 function describe(a: Activity, appts: Map<string, Appointment>): string {
   const who = a.appointmentId
@@ -26,25 +42,27 @@ function describe(a: Activity, appts: Map<string, Appointment>): string {
   const d = a.detail as Record<string, unknown>;
   switch (a.action) {
     case "booked":
-      return `Booked ${who ?? "a patient"}`;
+      return `Booked an appointment for ${who ?? "a patient"}`;
     case "completed":
-      return `Completed ${who ?? "a visit"}`;
+      return `Finished ${who ?? "a patient"}'s visit`;
     case "cancelled":
-      return `Cancelled ${who ?? "a visit"}${d.reason ? ` — ${d.reason}` : ""}`;
+      return `Cancelled ${who ?? "a patient"}'s appointment${d.reason ? ` (reason: ${d.reason})` : ""}`;
     case "fee_changed":
       return `Changed ${who ?? "a visit"}'s fee ${d.from == null ? "" : `from ${rupees(Number(d.from))} `}to ${rupees(Number(d.to))}`;
     case "closed_today":
-      return "Closed bookings for today";
+      return "Stopped new bookings for today";
     case "opened_today":
-      return "Opened bookings for today";
+      return "Started taking bookings for today again";
     case "blocked":
-      return d.whole ? `Blocked ${d.date}` : "Blocked some time";
+      return d.whole
+        ? `Blocked the whole day ${d.date} (no bookings)`
+        : `Blocked some time on ${d.date ?? "a day"} (no bookings)`;
     case "hours_changed":
-      return "Changed clinic hours";
+      return "Changed the clinic hours";
     case "fee_default_changed":
       return `Set the standard fee to ${rupees(Number(d.to))}`;
     case "rx_setup_changed":
-      return "Updated prescription setup";
+      return "Updated the registration number or signature";
     case "staff_added":
       return `Added ${d.name ?? "a receptionist"}`;
     case "staff_removed":
@@ -65,7 +83,8 @@ const PERIODS = [
 export default async function ReportsPage({
   searchParams,
 }: PageProps<"/reports">) {
-  const { who, p: rawP } = await searchParams;
+  const { who, p: rawP, view } = await searchParams;
+  const full = view === "activity";
   const p: PeriodKey = PERIODS.some(([k]) => k === rawP)
     ? (rawP as PeriodKey)
     : "month";
@@ -89,6 +108,100 @@ export default async function ReportsPage({
     ["Cancelled", s.cancelled, "var(--danger)"],
   ] as const;
   const max = Math.max(1, ...bars.map((b) => b[1]));
+
+  if (full)
+    return (
+      <div className="grid gap-5">
+        <PageHead eyebrow="Reports" title="Activity">
+          <Link href={`/reports?p=${p}`} className="btn btn-ghost btn-sm">
+            Back to overview
+          </Link>
+        </PageHead>
+        <section className="card card-pad grid gap-4" aria-labelledby="log-h">
+          <div className="grid gap-1">
+            <h2 id="log-h" className="display text-[20px] font-medium">
+              Who did what, and when
+            </h2>
+            <p className="max-w-2xl text-sm text-muted">
+              Every time someone books, finishes or cancels a visit, changes a
+              fee, closes the clinic for a day or changes settings or staff, a
+              row is added here, newest first. "Who" is the person who was
+              logged in, or "Patient (WhatsApp)" when a patient did it on
+              WhatsApp. Use it to check what happened if something looks wrong.
+            </p>
+          </div>
+          <nav
+            aria-label="Filter activity by person"
+            className="flex flex-wrap gap-2"
+          >
+            <Link
+              href={`/reports?p=${p}&view=activity`}
+              className="pill"
+              aria-current={!staffId ? "page" : undefined}
+            >
+              Everyone
+            </Link>
+            {staff.map((x) => (
+              <Link
+                key={x.id}
+                href={q({ who: x.id, view: "activity" })}
+                className="pill"
+                aria-current={staffId === x.id ? "page" : undefined}
+              >
+                {x.role === "doctor" ? doctor.name : x.name}
+              </Link>
+            ))}
+          </nav>
+          <div className="scroll-area inner max-h-[calc(100dvh-420px)] min-h-60 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="sticky top-0 bg-sunk text-[12px] text-muted">
+                <tr>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    When
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Who
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    Type
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-semibold">
+                    What happened
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {activity.map((a) => {
+                  const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
+                  return (
+                    <tr key={a.id}>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted">
+                        {fmtDay(a.at)}, {fmtTime(a.at)}
+                      </td>
+                      <td className="px-4 py-3 font-semibold">{a.actor}</td>
+                      <td className="px-4 py-3">
+                        <span className={`badge ${cls}`}>{kind}</span>
+                      </td>
+                      <td className="px-4 py-3">{describe(a, byId)}</td>
+                    </tr>
+                  );
+                })}
+                {!activity.length && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-8 text-center text-muted"
+                    >
+                      Nothing yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    );
 
   return (
     <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
@@ -201,35 +314,19 @@ export default async function ReportsPage({
               to see only theirs.
             </p>
           </div>
-          <nav
-            aria-label="Filter activity by person"
-            className="flex flex-wrap gap-2"
+          <Link
+            href={q({ view: "activity" })}
+            className="btn btn-ghost btn-sm justify-self-start"
           >
-            <Link
-              href={`/reports?p=${p}`}
-              className="pill"
-              aria-current={!staffId ? "page" : undefined}
-            >
-              Everyone
-            </Link>
-            {staff.map((x) => (
-              <Link
-                key={x.id}
-                href={q({ who: x.id })}
-                className="pill"
-                aria-current={staffId === x.id ? "page" : undefined}
-              >
-                {x.role === "doctor" ? doctor.name : x.name}
-              </Link>
-            ))}
-          </nav>
+            See the full activity table
+          </Link>
           {!activity.length ? (
             <p className="text-[15px] text-muted">
               Nothing yet. Bookings, visits and changes show up here.
             </p>
           ) : (
             <ol className="scroll-area -mx-1 grid content-start gap-2 px-1 lg:flex-1">
-              {activity.map((a) => (
+              {activity.slice(0, 8).map((a) => (
                 <li key={a.id} className="inner grid gap-0.5 p-3">
                   <p className="text-[14px] font-semibold">
                     {describe(a, byId)}

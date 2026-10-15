@@ -207,7 +207,7 @@ export function Fee(p: { initial: number }) {
   return (
     <Section
       title="Standard fee"
-      hint="Filled in when a visit is completed. You can change it per visit."
+      hint="Used for every visit you complete from now on. Past visits keep the fee they were charged, so changing it from ₹500 to ₹700 never changes old totals. You can still change the fee of a single visit."
     >
       <label className="grid gap-1.5">
         <span className="text-sm font-semibold">Fee (₹)</span>
@@ -463,6 +463,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
     null,
   );
   const [removing, setRemoving] = useState<Person | null>(null);
+  const [find, setFind] = useState("");
   const [error, setError] = useState("");
   const { busy, start, say, toastEl } = useRun();
 
@@ -479,49 +480,95 @@ export function StaffList(p: { me: string; people: Person[] }) {
       title="Staff"
       hint="Each person logs in with their own key. Only you can see this."
     >
-      <ul className="grid divide-y divide-[var(--line)]">
-        {p.people.map((s) => (
-          <li
-            key={s.id}
-            className="flex flex-wrap items-center justify-between gap-3 py-3"
-          >
-            <div className="min-w-0">
-              <p className="font-semibold">{s.name}</p>
-              <p className="text-[13px] text-muted">
-                {s.role === "doctor" ? "Doctor" : "Reception"} · added {s.added}{" "}
-                · last active {s.lastActive}
-              </p>
-              <KeyView id={s.id} />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={busy}
-                onClick={() =>
-                  window.confirm(
-                    s.id === p.me
-                      ? "Make a new key for you? Your other devices will be logged out."
-                      : `Make a new key for ${s.name}? Their old key stops working.`,
-                  ) && start(async () => gotKey(await newKeyAction(s.id)))
-                }
-              >
-                <KeyRound size={16} aria-hidden /> New key
-              </button>
-              {s.role !== "doctor" && (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  disabled={busy}
-                  onClick={() => setRemoving(s)}
-                >
-                  <UserMinus size={16} aria-hidden /> Remove
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {p.people.length > 8 && (
+        <input
+          type="search"
+          className="field"
+          placeholder="Search staff by name"
+          aria-label="Search staff by name"
+          value={find}
+          onChange={(e) => setFind(e.target.value)}
+        />
+      )}
+      <div className="scroll-area inner max-h-[420px] overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="sticky top-0 z-10 bg-sunk text-[12px] text-muted">
+            <tr>
+              <th scope="col" className="px-4 py-3 font-semibold">
+                Name
+              </th>
+              <th scope="col" className="px-4 py-3 font-semibold">
+                Login key
+              </th>
+              <th scope="col" className="px-4 py-3 font-semibold">
+                Last active
+              </th>
+              <th scope="col" className="px-4 py-3 font-semibold">
+                Added
+              </th>
+              <th scope="col" className="px-4 py-3 text-right font-semibold">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--line)]">
+            {p.people
+              .filter((s) =>
+                s.name.toLowerCase().includes(find.trim().toLowerCase()),
+              )
+              .map((s) => (
+                <tr key={s.id} className="align-middle">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold">{s.name}</p>
+                    <span
+                      className={`badge mt-1 ${s.role === "doctor" ? "badge-done" : "badge-money"}`}
+                    >
+                      {s.role === "doctor" ? "Doctor" : "Reception"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <KeyView id={s.id} />
+                  </td>
+                  <td className="px-4 py-3 text-muted">{s.lastActive}</td>
+                  <td className="px-4 py-3 text-muted">{s.added}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="btn-icon"
+                        disabled={busy}
+                        aria-label={`New key for ${s.name}`}
+                        title="New key"
+                        onClick={() =>
+                          window.confirm(
+                            s.id === p.me
+                              ? "Make a new key for you? Your other devices will be logged out."
+                              : `Make a new key for ${s.name}? Their old key stops working.`,
+                          ) &&
+                          start(async () => gotKey(await newKeyAction(s.id)))
+                        }
+                      >
+                        <KeyRound size={16} strokeWidth={1.75} aria-hidden />
+                      </button>
+                      {s.role !== "doctor" && (
+                        <button
+                          type="button"
+                          className="btn-icon text-danger"
+                          disabled={busy}
+                          aria-label={`Remove ${s.name}`}
+                          title="Remove"
+                          onClick={() => setRemoving(s)}
+                        >
+                          <UserMinus size={16} strokeWidth={1.75} aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
       <Err id="staff-err" text={!adding ? error : undefined} />
       <button
         type="button"
@@ -673,9 +720,9 @@ function KeyView({ id }: { id: string }) {
       }
     });
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2">
       <span
-        className="inner px-3 py-2 font-mono text-[14px] tracking-wider select-all"
+        className="font-mono text-[13px] tracking-wider whitespace-nowrap select-all"
         aria-live="polite"
       >
         {key ?? "••-••••-••••-••••"}
@@ -708,7 +755,7 @@ function KeyView({ id }: { id: string }) {
       )}
       {missing && !key && (
         <span className="text-[13px] text-muted">
-          Made before keys could be viewed. Tap New key to see it here.
+          Older key. Make a new key to see it.
         </span>
       )}
     </div>

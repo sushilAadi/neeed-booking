@@ -55,6 +55,16 @@ export async function handleDoctor(c: BotCtx): Promise<Send[]> {
   );
 }
 
+const COMMAND_WORDS = new Set([
+  "menu",
+  "hi",
+  "hello",
+  "back",
+  "setup",
+  "help",
+  "start",
+  "cancel",
+]);
 const REG_PROMPT =
   'One-time setup: what\'s your medical registration number? (printed on every prescription slip — reply "setup" any time to change it later)';
 const SIG_PROMPT =
@@ -221,6 +231,13 @@ async function startSetup(c: BotCtx, conv: Conversation): Promise<Reply[]> {
 async function setupReg(c: BotCtx, conv: Conversation): Promise<Reply[]> {
   const reg = c.msg.type === "text" ? clean(c.msg.text).slice(0, 60) : "";
   if (!reg) return [say(REG_PROMPT)];
+  // "/menu", "hi", "back"… are the doctor reaching for a command, not a registration number.
+  if (/^\//.test(reg) || COMMAND_WORDS.has(reg.toLowerCase()))
+    return [
+      say(
+        `"${reg}" doesn't look like a registration number, so it wasn't saved.\n\n${REG_PROMPT}`,
+      ),
+    ];
   await c.store.updateDoctor(c.doctor.id, { registrationNumber: reg });
   await saveState(c.store, conv, "setup_sig");
   return [say(SIG_PROMPT)];
