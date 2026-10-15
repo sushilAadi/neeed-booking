@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { RegisterSW } from "@/components/register-sw";
 
 // Same fonts as the Uranium Fitness site.
 const body = localFont({
@@ -22,6 +23,7 @@ export const metadata: Metadata = {
   title: { default: "Neeed", template: "%s · Neeed" },
   description: "WhatsApp booking and prescriptions for your clinic.",
   robots: { index: false },
+  appleWebApp: { capable: true, title: "Neeed", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -46,6 +48,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         {children}
+        <RegisterSW />
       </body>
     </html>
   );

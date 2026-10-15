@@ -110,7 +110,7 @@ export function TodayView(p: {
             <Morph active={p.closed} off="Taking bookings" on="Closed today" />
             <span
               aria-hidden
-              className={`relative h-6 w-10 rounded-full transition-colors ${p.closed ? "bg-sunk" : "bg-accent"}`}
+              className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${p.closed ? "bg-sunk" : "bg-accent"}`}
             >
               <span
                 className={`absolute top-1 left-1 size-4 rounded-full bg-surface shadow transition-transform ${p.closed ? "" : "translate-x-4"}`}

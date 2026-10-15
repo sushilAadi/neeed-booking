@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const ALL_TABS = [
   { href: "/today", label: "Today", Icon: CalendarDays, perm: null },
@@ -30,6 +31,21 @@ export function Nav(p: {
   allowed: string[];
 }) {
   const path = usePathname();
+  // Phones: slide the tab bar away while scrolling down, bring it back on any scroll up.
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (Math.abs(y - last) < 8) return;
+      setHidden(y > last && y > 80);
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: show the bar again on every page change
+  useEffect(() => setHidden(false), [path]);
   const TABS = ALL_TABS.filter((t) => !t.perm || p.allowed.includes(t.perm));
   return (
     <>
@@ -87,7 +103,7 @@ export function Nav(p: {
 
       <nav
         aria-label="Main"
-        className="glass fixed inset-x-3 bottom-3 z-30 rounded-[28px] border shadow-[var(--shadow-lift)] md:hidden"
+        className={`glass fixed inset-x-3 bottom-3 z-30 rounded-[28px] border shadow-[var(--shadow-lift)] transition-transform duration-300 ease-[cubic-bezier(0.2,0,0,1)] md:hidden ${hidden ? "translate-y-[calc(100%+24px)]" : ""}`}
         style={{ marginBottom: "env(safe-area-inset-bottom)" }}
       >
         <ul

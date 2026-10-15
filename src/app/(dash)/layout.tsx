@@ -33,7 +33,7 @@ export default async function DashLayout({
       />
       <div className="min-w-0 flex-1">
         <header className="chrome sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
-          <div className="flex h-[68px] items-center justify-between gap-3 px-4 md:px-8">
+          <div className="flex h-[72px] items-end justify-between gap-3 px-4 pb-2 md:h-[68px] md:items-center md:px-8 md:pb-0">
             <div className="flex min-w-0 items-center gap-3">
               {logoUrl && (
                 <img
@@ -46,15 +46,23 @@ export default async function DashLayout({
                 <p className="display truncate text-[17px] font-bold md:text-[19px]">
                   {doctor.clinicName}
                 </p>
-                <p className="truncate text-[13px] text-muted">{fmtDay(now)}</p>
+                <p className="truncate text-[13px] text-muted">
+                  {fmtDay(now)}
+                  {/* phones: one quiet status line instead of pills */}
+                  <span className="sm:hidden">
+                    {" · "}
+                    {staff.role === "doctor" ? "Doctor" : "Reception"}
+                    {" · "}
+                    <span className={closed ? "text-danger" : "text-ok"}>
+                      {closed ? "Closed" : "Open"}
+                    </span>
+                  </span>
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-3">
-              <span className="badge badge-done py-2 sm:hidden">
-                {staff.role === "doctor" ? "Doctor" : "Reception"}
-              </span>
               <span
-                className={`badge ${closed ? "badge-cancel" : "badge-money"} py-2`}
+                className={`badge ${closed ? "badge-cancel" : "badge-money"} py-2 max-sm:hidden`}
               >
                 {closed ? "Closed today" : "Open today"}
               </span>

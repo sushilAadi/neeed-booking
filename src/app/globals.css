@@ -131,6 +131,9 @@ body {
     border: 0;
     background: transparent;
     border-radius: 0;
+    /* one page scroll on phones, no scroll-inside-a-scroll */
+    max-height: none;
+    overflow: visible;
   }
   .dt table,
   .dt tbody {
