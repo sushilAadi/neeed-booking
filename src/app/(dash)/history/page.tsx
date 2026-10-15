@@ -80,7 +80,7 @@ export default async function HistoryPage({
     `/history?${new URLSearchParams({ ...(q ? { q } : {}), ...(d ? { d } : { p }), ...o }).toString()}`;
 
   return (
-    <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_minmax(0,1fr)]">
+    <div className="grid gap-5 lg:h-[calc(100dvh-100px)] lg:grid-rows-[auto_minmax(0,1fr)]">
       <PageHead eyebrow="Every visit, searchable" title="History">
         <nav aria-label="Period" className="flex flex-wrap gap-2">
           {PERIODS.map(([k, label]) => (

@@ -191,7 +191,7 @@ export function Hours(p: { initial: HoursForm }) {
       </fieldset>
       <button
         type="button"
-        className="btn btn-primary"
+        className="btn btn-primary sm:min-w-48 sm:justify-self-end"
         disabled={busy}
         onClick={() =>
           start(async () => {
@@ -238,7 +238,7 @@ export function Fee(p: { initial: number }) {
       </label>
       <button
         type="button"
-        className="btn btn-primary"
+        className="btn btn-primary sm:min-w-48 sm:justify-self-end"
         disabled={busy || fee === "" || Number(fee) === p.initial}
         onClick={() =>
           start(async () => {
@@ -347,7 +347,7 @@ export function BlockTime(p: {
       )}
       <button
         type="button"
-        className="btn btn-primary"
+        className="btn btn-primary sm:min-w-48 sm:justify-self-end"
         disabled={busy}
         onClick={() => go(null)}
       >
@@ -448,7 +448,11 @@ export function RxSetup(p: { reg: string; sigUrl: string | null }) {
           />
         )}
         <Err id="sig-err" text={error} />
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button
+          type="submit"
+          className="btn btn-primary sm:min-w-48 sm:justify-self-end"
+          disabled={busy}
+        >
           {busy ? (
             "Saving…"
           ) : (
@@ -619,7 +623,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
         <Err id="add-err" text={adding ? error : undefined} />
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary sm:min-w-48 sm:justify-self-end"
           disabled={busy || !name.trim()}
           onClick={() =>
             start(async () => gotKey(await addReceptionistAction(name)))
@@ -678,7 +682,7 @@ export function StaffList(p: { me: string; people: Person[] }) {
         </div>
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary sm:min-w-48 sm:justify-self-end"
           onClick={() => setShown(null)}
         >
           I've saved it
@@ -892,7 +896,7 @@ export function ClinicDetails(p: {
       <div className="grid gap-4 md:grid-cols-2">
         {field("clinicName", "Clinic name", "Rao Family Clinic", 80)}
         {field("name", "Your name (as printed)", "Asha Rao", 70)}
-        <div className="md:col-span-2">
+        <div>
           {field(
             "address",
             "Chamber address",
@@ -900,7 +904,7 @@ export function ClinicDetails(p: {
             200,
           )}
         </div>
-        <div className="grid gap-1.5 md:col-span-2">
+        <div className="grid content-start gap-1.5">
           <span className="text-sm font-semibold">Your WhatsApp number</span>
           <span className="field flex items-center justify-between bg-sunk text-muted">
             {p.phone}
@@ -914,7 +918,7 @@ export function ClinicDetails(p: {
       </div>
       <button
         type="button"
-        className="btn btn-primary"
+        className="btn btn-primary sm:min-w-48 sm:justify-self-end"
         disabled={busy}
         onClick={() =>
           start(async () => {
@@ -995,7 +999,7 @@ function AccessPanel(p: {
         <Err id="access-err" text={err} />
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-primary sm:min-w-48 sm:justify-self-end"
           disabled={busy}
           onClick={() =>
             p.person &&

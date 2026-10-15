@@ -96,7 +96,7 @@ export function TodayView(p: {
   );
 
   return (
-    <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
+    <div className="grid gap-5 lg:h-[calc(100dvh-100px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
       <PageHead eyebrow="Your clinic desk for today" title="Today">
         {allow("close") && (
           <button

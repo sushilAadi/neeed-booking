@@ -32,8 +32,8 @@ export default async function DashLayout({
         allowed={PERMS.map(([k]) => k).filter((k) => can(staff, k))}
       />
       <div className="min-w-0 flex-1">
-        <header className="glass sticky top-0 z-20 border-b border-line pt-[env(safe-area-inset-top)]">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8 md:py-4">
+        <header className="chrome sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
+          <div className="flex h-[68px] items-center justify-between gap-3 px-4 md:px-8">
             <div className="flex min-w-0 items-center gap-3">
               {logoUrl && (
                 <img
@@ -76,7 +76,7 @@ export default async function DashLayout({
             </div>
           </div>
         </header>
-        <main className="px-4 pt-4 pb-32 md:px-8 md:pb-8">{children}</main>
+        <main className="px-4 pb-32 md:px-8 md:pb-8">{children}</main>
       </div>
     </div>
   );

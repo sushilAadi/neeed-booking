@@ -137,6 +137,11 @@ body {
     border: 1px solid var(--line);
     background: var(--surface);
   }
+  /* Sticky top bar and page heading: same fixed gradient as the page, so they blend in */
+  .chrome {
+    background: var(--bg-grad);
+    background-attachment: fixed;
+  }
   .glass {
     background: var(--glass);
     -webkit-backdrop-filter: blur(18px) saturate(1.5);
