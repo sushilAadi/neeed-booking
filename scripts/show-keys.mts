@@ -26,7 +26,18 @@ q = arg("doctor")
   ? q.eq("id", arg("doctor") as string)
   : q.eq("personal_phone", (arg("phone") as string).replace(/\D/g, ""));
 const { data: doc, error } = await q.maybeSingle();
-if (error || !doc) throw new Error("No such doctor.");
+if (error || !doc) {
+  const { data: all } = await db
+    .from("doctors")
+    .select("id,name,clinic_name,personal_phone")
+    .order("clinic_name");
+  console.error("No doctor with that number or id. Clinics:");
+  for (const d of all ?? [])
+    console.error(
+      `  ${d.clinic_name} — ${d.name}  --phone ${d.personal_phone}  --doctor ${d.id}`,
+    );
+  process.exit(1);
+}
 const { data: rows } = await db
   .from("staff")
   .select("name,role,active,key_enc,last_active_at")
