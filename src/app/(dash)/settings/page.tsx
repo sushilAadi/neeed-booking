@@ -1,7 +1,6 @@
 import { Rise } from "cube-motion/react";
-import { Clock, FileSignature, IndianRupee, LogOut, Users } from "lucide-react";
+import { LogOut } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHead } from "@/components/page-head";
 import { requireStaff } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
@@ -11,12 +10,7 @@ import { BlockTime, Fee, Hours, RxSetup, StaffList } from "./sections";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string }>;
-}) {
-  const sp = await searchParams;
+export default async function Page() {
   const { doctor, staff, store, now } = await requireStaff();
   const isDoctor = staff.role === "doctor";
   const first = today(now).date;
@@ -44,80 +38,52 @@ export default async function Page({
           .catch(() => null)
       : null;
 
-  const TABS = [
-    ["hours", "Clinic hours", Clock],
-    ["fees", "Fee and block time", IndianRupee],
-    ...(isDoctor
-      ? ([
-          ["rx", "Prescription", FileSignature],
-          ["staff", "Staff", Users],
-        ] as const)
-      : []),
-  ] as const;
-  const tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as string) : "hours";
-
   return (
     <div className="grid gap-5">
       <PageHead
-        eyebrow="Clinic hours, fees, prescriptions and staff"
+        eyebrow="Clinic hours, fees, prescription setup and staff"
         title="Settings"
       />
-      <nav aria-label="Settings sections" className="flex flex-wrap gap-2">
-        {TABS.map(([k, label, Icon]) => (
-          <Link
-            key={k}
-            href={`/settings?tab=${k}`}
-            className="pill"
-            aria-current={tab === k ? "page" : undefined}
-          >
-            <Icon size={16} strokeWidth={1.75} aria-hidden /> {label}
-          </Link>
-        ))}
-      </nav>
-      <Rise
-        key={tab}
-        targets="children"
-        className={`grid gap-4 ${tab === "staff" ? "max-w-5xl" : "max-w-3xl"}`}
-      >
-        {tab === "hours" && (
-          <Hours
-            initial={{
-              morning: periodHours(doctor, "morning"),
-              afternoon: periodHours(doctor, "afternoon"),
-              evening: periodHours(doctor, "evening"),
-              lunch:
-                doctor.lunchStart && doctor.lunchEnd
-                  ? { start: doctor.lunchStart, end: doctor.lunchEnd }
-                  : null,
-              slotMinutes: doctor.slotMinutes,
-            }}
+      <Rise targets="children" className="grid gap-4">
+        <Hours
+          initial={{
+            morning: periodHours(doctor, "morning"),
+            afternoon: periodHours(doctor, "afternoon"),
+            evening: periodHours(doctor, "evening"),
+            lunch:
+              doctor.lunchStart && doctor.lunchEnd
+                ? { start: doctor.lunchStart, end: doctor.lunchEnd }
+                : null,
+            slotMinutes: doctor.slotMinutes,
+          }}
+        />
+        <div
+          className={`grid gap-4 lg:items-start ${isDoctor ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" : ""}`}
+        >
+          {isDoctor && <Fee initial={doctor.standardFee} />}
+          <BlockTime
+            days={days}
+            off={PERIODS.filter((p) => !periodHours(doctor, p))}
           />
-        )}
-        {tab === "fees" && (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
-            <Fee initial={doctor.standardFee} />
-            <BlockTime
-              days={days}
-              off={PERIODS.filter((p) => !periodHours(doctor, p))}
+        </div>
+        {isDoctor && (
+          <>
+            <RxSetup reg={doctor.registrationNumber ?? ""} sigUrl={sigUrl} />
+            <StaffList
+              me={staff.id}
+              people={people
+                .filter((p) => p.active)
+                .map((p) => ({
+                  id: p.id,
+                  name: p.role === "doctor" ? `${doctor.name} (you)` : p.name,
+                  role: p.role,
+                  added: fmtDate(p.createdAt),
+                  lastActive: p.lastActiveAt
+                    ? fmtDate(p.lastActiveAt)
+                    : "Never",
+                }))}
             />
-          </div>
-        )}
-        {tab === "rx" && isDoctor && (
-          <RxSetup reg={doctor.registrationNumber ?? ""} sigUrl={sigUrl} />
-        )}
-        {tab === "staff" && isDoctor && (
-          <StaffList
-            me={staff.id}
-            people={people
-              .filter((p) => p.active)
-              .map((p) => ({
-                id: p.id,
-                name: p.role === "doctor" ? `${doctor.name} (you)` : p.name,
-                role: p.role,
-                added: fmtDate(p.createdAt),
-                lastActive: p.lastActiveAt ? fmtDate(p.lastActiveAt) : "Never",
-              }))}
-          />
+          </>
         )}
       </Rise>
       <form action="/logout" method="post" className="md:hidden">

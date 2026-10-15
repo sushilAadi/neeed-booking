@@ -2,6 +2,7 @@
 
 import { Morph } from "cube-motion/react";
 import { CalendarPlus, Check, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   type AddResult,
@@ -25,13 +26,29 @@ const GENDERS = [
   ["O", "Other"],
 ] as const;
 
+export type Booked = {
+  id: string;
+  time: string;
+  name: string;
+  phone: string;
+  status: "CONFIRMED" | "COMPLETED" | "CANCELLED";
+};
+const BADGE = {
+  CONFIRMED: ["Waiting", "badge-wait"],
+  COMPLETED: ["Done", "badge-done"],
+  CANCELLED: ["Cancelled", "badge-cancel"],
+} as const;
+
 export function AddForm({
   initialSlots,
   initialPhone = "",
+  bookings,
 }: {
   initialSlots: SlotGroups;
   initialPhone?: string;
+  bookings: Booked[];
 }) {
+  const router = useRouter();
   const [f, setF] = useState({ ...EMPTY, phone: initialPhone });
   const [booked, setBooked] = useState(false);
   const [slots, setSlots] = useState(initialSlots);
@@ -76,6 +93,7 @@ export function AddForm({
         setErrors({});
         setNote({ ok: true, text: r.message });
         setBooked(true);
+        router.refresh();
         setTimeout(() => setBooked(false), 2500);
       } else {
         setErrors(r.errors ?? {});
@@ -96,7 +114,7 @@ export function AddForm({
     <form
       onSubmit={submit}
       noValidate
-      className="grid gap-4 lg:grid-cols-2 lg:items-start"
+      className="grid gap-4 lg:grid-flow-dense lg:grid-cols-2 lg:items-start"
     >
       {note && (
         <output
@@ -109,7 +127,10 @@ export function AddForm({
         </output>
       )}
 
-      <section className="card card-pad grid gap-4" aria-label="Patient">
+      <section
+        className="card card-pad grid gap-4 lg:col-start-1 lg:row-span-2"
+        aria-label="Patient"
+      >
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold">WhatsApp mobile no.</span>
           <input
@@ -218,7 +239,7 @@ export function AddForm({
       </section>
 
       <section
-        className="card card-pad flex flex-col gap-4 lg:max-h-[calc(100dvh-230px)]"
+        className="card card-pad flex flex-col gap-4 lg:col-start-2 lg:max-h-[calc(100dvh-420px)] lg:min-h-80"
         aria-labelledby="time-h"
       >
         <div className="flex items-baseline justify-between">
@@ -268,6 +289,41 @@ export function AddForm({
             <Morph active={booked} off="Book appointment" on="Booked" />
           )}
         </button>
+      </section>
+      <section
+        className="card card-pad grid content-start gap-2 lg:col-start-2"
+        aria-label="Already booked today"
+      >
+        <p className="eyebrow">Already booked today ({bookings.length})</p>
+        {!bookings.length ? (
+          <p className="text-sm text-muted">No bookings yet today.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Already booked today</caption>
+            <tbody className="divide-y divide-[var(--line)]">
+              {bookings.map((b) => (
+                <tr key={b.id}>
+                  <td className="py-2 pr-3 font-semibold whitespace-nowrap">
+                    {b.time}
+                  </td>
+                  <td
+                    className={`py-2 pr-3 ${b.status === "CANCELLED" ? "text-muted line-through" : ""}`}
+                  >
+                    {b.name}
+                  </td>
+                  <td className="py-2 pr-3 whitespace-nowrap text-muted">
+                    {b.phone}
+                  </td>
+                  <td className="py-2 text-right">
+                    <span className={`badge ${BADGE[b.status][1]}`}>
+                      {BADGE[b.status][0]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
     </form>
   );

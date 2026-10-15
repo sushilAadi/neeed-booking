@@ -99,61 +99,68 @@ export function Hours(p: { initial: HoursForm }) {
       title="Clinic hours"
       hint="Existing bookings are kept when you change hours."
     >
-      {ROWS.map(([k, label]) => {
-        const r = f[k];
-        return (
-          <fieldset
-            key={k}
-            className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)_auto]"
-          >
-            <legend className="sr-only">{label}</legend>
-            <span aria-hidden className="text-sm font-semibold max-sm:order-1">
-              {label}
-            </span>
-            {r ? (
-              (["start", "end"] as const).map((side) => (
-                <input
-                  key={side}
-                  type="time"
-                  step={900}
-                  className="field min-h-11 min-w-0 px-2 text-[14px] max-sm:order-3"
-                  aria-label={`${label} ${side === "start" ? "from" : "to"}`}
-                  value={r[side]}
-                  aria-invalid={!!errors[k] || undefined}
-                  aria-describedby={`h-${k}-err`}
-                  onChange={(e) => setRow(k, { ...r, [side]: e.target.value })}
-                />
-              ))
-            ) : (
-              <span className="col-span-2 text-sm text-muted max-sm:order-3">
-                {k === "lunch" ? "No break" : "Closed"}
+      <div className="grid gap-x-8 gap-y-3 lg:grid-cols-2">
+        {ROWS.map(([k, label]) => {
+          const r = f[k];
+          return (
+            <fieldset
+              key={k}
+              className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[68px_minmax(0,1fr)_minmax(0,1fr)_auto]"
+            >
+              <legend className="sr-only">{label}</legend>
+              <span
+                aria-hidden
+                className="text-sm font-semibold max-sm:order-1"
+              >
+                {label}
               </span>
-            )}
-            <label className="flex min-h-11 items-center gap-1.5 justify-self-end text-[13px] text-muted max-sm:order-2">
-              <input
-                type="checkbox"
-                className="size-4 accent-[var(--accent)]"
-                checked={!r}
-                onChange={(e) =>
-                  setRow(
-                    k,
-                    e.target.checked
-                      ? null
-                      : (p.initial[k] ??
-                          (k === "lunch"
-                            ? { start: "13:00", end: "14:00" }
-                            : { start: "09:00", end: "12:00" })),
-                  )
-                }
-              />
-              Off
-            </label>
-            <div className="col-span-2 empty:hidden max-sm:order-4 sm:col-span-4">
-              <Err id={`h-${k}-err`} text={errors[k]} />
-            </div>
-          </fieldset>
-        );
-      })}
+              {r ? (
+                (["start", "end"] as const).map((side) => (
+                  <input
+                    key={side}
+                    type="time"
+                    step={900}
+                    className="field min-h-11 min-w-0 px-2 text-[14px] max-sm:order-3"
+                    aria-label={`${label} ${side === "start" ? "from" : "to"}`}
+                    value={r[side]}
+                    aria-invalid={!!errors[k] || undefined}
+                    aria-describedby={`h-${k}-err`}
+                    onChange={(e) =>
+                      setRow(k, { ...r, [side]: e.target.value })
+                    }
+                  />
+                ))
+              ) : (
+                <span className="col-span-2 text-sm text-muted max-sm:order-3">
+                  {k === "lunch" ? "No break" : "Closed"}
+                </span>
+              )}
+              <label className="flex min-h-11 items-center gap-1.5 justify-self-end text-[13px] text-muted max-sm:order-2">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[var(--accent)]"
+                  checked={!r}
+                  onChange={(e) =>
+                    setRow(
+                      k,
+                      e.target.checked
+                        ? null
+                        : (p.initial[k] ??
+                            (k === "lunch"
+                              ? { start: "13:00", end: "14:00" }
+                              : { start: "09:00", end: "12:00" })),
+                    )
+                  }
+                />
+                Off
+              </label>
+              <div className="col-span-2 empty:hidden max-sm:order-4 sm:col-span-4">
+                <Err id={`h-${k}-err`} text={errors[k]} />
+              </div>
+            </fieldset>
+          );
+        })}
+      </div>
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-sm font-semibold">Time per patient</legend>
         <div className="grid grid-cols-4 gap-2">
@@ -380,7 +387,7 @@ export function RxSetup(p: { reg: string; sigUrl: string | null }) {
   return (
     <Section
       title="Prescription setup"
-      hint="Printed on every prescription PDF."
+      hint="One-time setup for the prescription PDF your patients get: your medical registration number and your signature are printed on every prescription."
     >
       <form
         className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"

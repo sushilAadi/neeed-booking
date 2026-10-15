@@ -204,7 +204,7 @@ export default async function ReportsPage({
     );
 
   return (
-    <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
+    <div className="grid gap-5">
       <PageHead eyebrow="How the clinic is doing" title="Reports">
         <nav aria-label="Period" className="flex flex-wrap gap-2">
           {PERIODS.map(([k, label]) => (
@@ -271,11 +271,11 @@ export default async function ReportsPage({
       <Rise
         targets="children"
         delay={120}
-        className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(280px,0.9fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]"
+        className="grid gap-4 lg:grid-cols-3 lg:items-start"
       >
         <section
           aria-labelledby="status-h"
-          className="card card-pad grid content-start gap-3"
+          className="card card-pad grid gap-3"
         >
           <h2 id="status-h" className="display text-[20px] font-medium">
             Visits
@@ -283,10 +283,7 @@ export default async function ReportsPage({
           <Ring waiting={s.waiting} done={s.done} cancelled={s.cancelled} />
         </section>
 
-        <section
-          aria-labelledby="money-h"
-          className="card card-pad flex min-h-0 flex-col gap-2"
-        >
+        <section aria-labelledby="money-h" className="card card-pad grid gap-2">
           <div>
             <h2 id="money-h" className="display text-[20px] font-medium">
               Collection
@@ -295,66 +292,23 @@ export default async function ReportsPage({
               This month {rupees(r.month.collection)} · last 12 months
             </p>
           </div>
-          <div className="min-h-44 flex-1">
+          <div className="h-44">
             <CollectionLine data={r.collectionByMonth} />
           </div>
         </section>
 
-        <section
-          aria-labelledby="act-h"
-          className="card card-pad flex min-h-0 flex-col gap-3 lg:col-start-3 lg:row-span-2 lg:row-start-1"
-        >
-          <div>
-            <h2 id="act-h" className="display text-[20px] font-medium">
-              Activity
-            </h2>
-            <p className="text-[13px] text-muted">
-              Who did what in your clinic, newest first: bookings, completed
-              visits, fee changes, closing days and staff changes. Tap a person
-              to see only theirs.
-            </p>
-          </div>
-          <Link
-            href={q({ view: "activity" })}
-            className="btn btn-ghost btn-sm justify-self-start"
-          >
-            See the full activity table
-          </Link>
-          {!activity.length ? (
-            <p className="text-[15px] text-muted">
-              Nothing yet. Bookings, visits and changes show up here.
-            </p>
-          ) : (
-            <ol className="scroll-area -mx-1 grid content-start gap-2 px-1 lg:flex-1">
-              {activity.slice(0, 8).map((a) => (
-                <li key={a.id} className="inner grid gap-0.5 p-3">
-                  <p className="text-[14px] font-semibold">
-                    {describe(a, byId)}
-                  </p>
-                  <p className="text-[12px] text-muted">
-                    {a.actor} · {fmtDay(a.at)}, {fmtTime(a.at)}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-
-        <section
-          aria-labelledby="mix-h"
-          className="card card-pad grid content-start gap-3 lg:col-span-2"
-        >
+        <section aria-labelledby="mix-h" className="card card-pad grid gap-3">
           <h2 id="mix-h" className="display text-[20px] font-medium">
             Where patients come from
           </h2>
-          <ul className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+          <ul className="grid gap-2.5">
             {bars.map(([label, n, color]) => (
-              <li key={label} className="grid gap-1.5">
+              <li key={label} className="grid gap-1">
                 <div className="flex justify-between text-sm">
                   <span>{label}</span>
                   <span className="font-semibold">{n}</span>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-sunk">
+                <div className="h-2.5 overflow-hidden rounded-full bg-sunk">
                   <div
                     className="h-full rounded-full"
                     style={{ width: `${(n / max) * 100}%`, background: color }}
@@ -363,6 +317,77 @@ export default async function ReportsPage({
               </li>
             ))}
           </ul>
+        </section>
+
+        <section
+          aria-labelledby="act-h"
+          className="card card-pad grid gap-3 lg:col-span-3"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="act-h" className="display text-[20px] font-medium">
+                Activity
+              </h2>
+              <p className="text-[13px] text-muted">
+                Who did what in your clinic, newest first.
+              </p>
+            </div>
+            <Link
+              href={q({ view: "activity" })}
+              className="btn btn-ghost btn-sm"
+            >
+              Open full table with filters
+            </Link>
+          </div>
+          <div className="scroll-area inner max-h-80 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-sm">
+              <thead className="sticky top-0 bg-sunk text-[12px] text-muted">
+                <tr>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
+                    When
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
+                    Who
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
+                    Type
+                  </th>
+                  <th scope="col" className="px-4 py-2.5 font-semibold">
+                    What happened
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--line)]">
+                {activity.slice(0, 50).map((a) => {
+                  const [kind, cls] = KIND[a.action] ?? ["Other", "badge-done"];
+                  return (
+                    <tr key={a.id}>
+                      <td className="px-4 py-2.5 whitespace-nowrap text-muted">
+                        {fmtDay(a.at)}, {fmtTime(a.at)}
+                      </td>
+                      <td className="px-4 py-2.5 font-semibold whitespace-nowrap">
+                        {a.actor}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`badge ${cls}`}>{kind}</span>
+                      </td>
+                      <td className="px-4 py-2.5">{describe(a, byId)}</td>
+                    </tr>
+                  );
+                })}
+                {!activity.length && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-4 py-8 text-center text-muted"
+                    >
+                      Nothing yet. Bookings, visits and changes show up here.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </Rise>
     </div>

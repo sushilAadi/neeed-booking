@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 export type Column<T> = {
@@ -27,6 +28,7 @@ export function DataTable<T>(p: {
   /** Table min width before it scrolls sideways. */
   minWidth?: number;
 }) {
+  const router = useRouter();
   const [f, setF] = useState<Record<string, string>>({});
   const shown = useMemo(
     () =>
@@ -106,7 +108,22 @@ export function DataTable<T>(p: {
               <tr
                 key={k}
                 aria-current={on ? "true" : undefined}
-                className={`group ${on ? "bg-done-soft" : "hover:bg-sunk"}`}
+                // The whole row opens it; the link in the first cell keeps it keyboard-reachable.
+                onClick={
+                  p.href
+                    ? (e) => {
+                        if (
+                          !(e.target as HTMLElement).closest(
+                            "a,button,input,select",
+                          )
+                        )
+                          router.push((p.href as (r: T) => string)(r), {
+                            scroll: false,
+                          });
+                      }
+                    : undefined
+                }
+                className={`group ${p.href ? "cursor-pointer" : ""} ${on ? "bg-done-soft" : "hover:bg-sunk"}`}
               >
                 {p.columns.map((c, i) => (
                   <td

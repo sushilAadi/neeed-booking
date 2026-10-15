@@ -47,8 +47,9 @@ export async function saveHoursAction(
   return { ok: true, message: "Hours saved. Existing bookings are kept." };
 }
 
+/** The standard fee is the doctor's decision: doctor only. */
 export async function saveFeeAction(fee: number): Promise<Result> {
-  const s = await requireStaff();
+  const s = await requireDoctorRole();
   if (!Number.isInteger(fee) || fee < 0 || fee > 999_999)
     return { ok: false, message: "Type the fee in whole rupees." };
   await s.store.updateDoctor(s.doctor.id, { standardFee: fee });

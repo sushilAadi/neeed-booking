@@ -229,6 +229,10 @@ body {
   .btn-icon:active {
     scale: 0.94;
   }
+  .btn-icon:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
   .btn-icon[aria-current="page"] {
     background: var(--accent);
     border-color: var(--accent);

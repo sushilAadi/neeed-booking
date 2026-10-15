@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DatePicker } from "@/components/date-picker";
 import { PageHead } from "@/components/page-head";
 import { requireStaff } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
@@ -118,16 +119,7 @@ export default async function HistoryPage({
                   className="field pl-11"
                 />
               </label>
-              <label className="shrink-0">
-                <span className="sr-only">Visits on date</span>
-                <input
-                  type="date"
-                  name="d"
-                  defaultValue={d}
-                  max={t.date}
-                  className="field w-[160px] px-3"
-                />
-              </label>
+              <DatePicker name="d" value={d} max={t.date} />
               <button type="submit" className="btn btn-primary">
                 Search
               </button>
