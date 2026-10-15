@@ -27,7 +27,7 @@ export default async function DashLayout({
     <div className="min-h-dvh md:flex">
       <Nav logoUrl={logoUrl} clinic={doctor.clinicName} />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 pt-[env(safe-area-inset-top)] glass border-b md:border-b-0 md:bg-transparent md:[backdrop-filter:none]">
+        <header className="sticky top-0 md:static z-20 pt-[env(safe-area-inset-top)] glass border-b md:border-b-0 md:bg-transparent md:[backdrop-filter:none]">
           <div className="flex items-center justify-between gap-3 px-4 py-3 md:px-8 md:pt-6 md:pb-2">
             <div className="flex min-w-0 items-center gap-3">
               {logoUrl && (
