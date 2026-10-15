@@ -246,6 +246,25 @@ export function createSupabaseStore(): Store {
       );
       return (rows ?? []).map(toAppointment);
     },
+    async searchAppointments(did, o) {
+      // Escape LIKE wildcards in what the user typed.
+      const like = (v: string) => `%${v.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      let q = db
+        .from("appointments")
+        .select("*")
+        .eq("doctor_id", did)
+        .gte("starts_at", o.from.toISOString())
+        .lt(
+          "starts_at",
+          (o.before && o.before < o.to ? o.before : o.to).toISOString(),
+        );
+      if (o.phone) q = q.like("patient_phone", like(o.phone));
+      if (o.name) q = q.ilike("patient_name", like(o.name));
+      const rows = must(
+        await q.order("starts_at", { ascending: false }).limit(o.limit),
+      );
+      return (rows ?? []).map(toAppointment);
+    },
     async createAppointment(n) {
       const { data, error } = await db
         .from("appointments")

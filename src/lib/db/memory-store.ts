@@ -100,6 +100,22 @@ export function createMemoryStore(seed?: { doctors?: Doctor[] }): MemoryStore {
         .sort((a, b) => +b.startsAt - +a.startsAt)
         .map((a) => ({ ...a }));
     },
+    async searchAppointments(did, o) {
+      const name = o.name?.toLowerCase();
+      return appointments
+        .filter(
+          (a) =>
+            a.doctorId === did &&
+            a.startsAt >= o.from &&
+            a.startsAt < o.to &&
+            (!o.before || a.startsAt < o.before) &&
+            (!o.phone || a.patientPhone.includes(o.phone)) &&
+            (!name || a.patientName.toLowerCase().includes(name)),
+        )
+        .sort((x, y) => +y.startsAt - +x.startsAt)
+        .slice(0, o.limit)
+        .map((a) => ({ ...a }));
+    },
     async createAppointment(n) {
       if (
         appointments.some(

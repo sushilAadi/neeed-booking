@@ -147,6 +147,18 @@ export interface Store {
     to: Date,
   ): Promise<Appointment[]>; // by startsAt asc, all statuses
   patientAppointments(doctorId: string, phone: string): Promise<Appointment[]>; // startsAt desc
+  /** History search: phone contains, or name contains (case-insensitive); startsAt desc. */
+  searchAppointments(
+    doctorId: string,
+    o: {
+      phone?: string;
+      name?: string;
+      from: Date;
+      to: Date;
+      limit: number;
+      before?: Date;
+    },
+  ): Promise<Appointment[]>;
   createAppointment(a: NewAppointment): Promise<Appointment | "slot_taken">;
   getAppointment(id: string): Promise<Appointment | null>;
   updateAppointment(
