@@ -17,7 +17,7 @@ export async function requestAccessAction(
     (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
   const from = process.env.WA_PLATFORM_PHONE_NUMBER_ID;
-  const to = process.env.NEEED_ADMIN_PHONE;
+  const to = process.env.NEEED_ADMIN_PHONE?.replace(/\D/g, "");
   const get = (k: string) => String(form.get(k) ?? "");
   const values = Object.fromEntries(
     ["doctorName", "clinicName", "city", "phone", "email"].map((k) => [
