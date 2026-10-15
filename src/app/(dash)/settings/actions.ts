@@ -18,6 +18,7 @@ import {
   type HoursKey,
   saveHours,
 } from "@/lib/clinic/availability";
+import { saveClinicDetails } from "@/lib/clinic/details";
 import { addReceptionist, reissueKey, removeStaff } from "@/lib/clinic/staff";
 import { PERIODS, type Period, periodHours, type Range } from "@/lib/slots";
 import { addDays } from "@/lib/time";
@@ -235,4 +236,26 @@ export async function revealKeyAction(id: string): Promise<string | null> {
   if (!who || who.doctorId !== s.doctor.id || !who.active) return null;
   const enc = await s.store.staffKeyEnc(id);
   return enc ? openKey(enc, pepper()) : null;
+}
+
+/** Clinic name, printed doctor name and chamber address — doctor only. */
+export async function saveClinicAction(input: {
+  clinicName: string;
+  name: string;
+  address: string;
+}) {
+  const s = await requireDoctorRole();
+  const r = await saveClinicDetails(
+    s.store,
+    s.doctor,
+    {
+      clinicName: String(input.clinicName ?? ""),
+      name: String(input.name ?? ""),
+      address: String(input.address ?? ""),
+    },
+    s.actor,
+    s.now,
+  );
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
 }

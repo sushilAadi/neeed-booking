@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Lock,
   UserMinus,
   UserPlus,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
   type Result,
   removeStaffAction,
   revealKeyAction,
+  saveClinicAction,
   saveFeeAction,
   saveHoursAction,
   saveRxSetupAction,
@@ -762,5 +764,95 @@ function KeyView({ id }: { id: string }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** Name and address printed on prescriptions; WhatsApp numbers are shown but locked. */
+export function ClinicDetails(p: {
+  clinicName: string;
+  name: string;
+  address: string;
+  phone: string;
+}) {
+  const [f, setF] = useState({
+    clinicName: p.clinicName,
+    name: p.name.replace(/^Dr\.?\s*/i, ""),
+    address: p.address,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { busy, start, say, saved, toastEl } = useRun();
+  const field = (k: keyof typeof f, label: string, ph: string, max: number) => (
+    <label className="grid gap-1.5">
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="relative block">
+        {k === "name" && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-semibold text-muted"
+          >
+            Dr.
+          </span>
+        )}
+        <input
+          className={`field ${k === "name" ? "pl-12" : ""}`}
+          value={f[k]}
+          placeholder={ph}
+          maxLength={max}
+          aria-invalid={!!errors[k] || undefined}
+          aria-describedby={`cd-${k}-err`}
+          onChange={(e) => setF({ ...f, [k]: e.target.value })}
+        />
+      </span>
+      <Err id={`cd-${k}-err`} text={errors[k]} />
+    </label>
+  );
+  return (
+    <Section
+      title="Clinic details"
+      hint="Shown at the top of the dashboard and printed on every prescription."
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        {field("clinicName", "Clinic name", "Rao Family Clinic", 80)}
+        {field("name", "Your name (as printed)", "Asha Rao", 70)}
+        <div className="md:col-span-2">
+          {field(
+            "address",
+            "Chamber address",
+            "Ward 4, Main Road, Tezpur 784001",
+            200,
+          )}
+        </div>
+        <div className="grid gap-1.5 md:col-span-2">
+          <span className="text-sm font-semibold">Your WhatsApp number</span>
+          <span className="field flex items-center justify-between bg-sunk text-muted">
+            {p.phone}
+            <Lock size={16} strokeWidth={1.75} aria-hidden />
+          </span>
+          <span className="text-[13px] text-muted">
+            WhatsApp numbers are linked to your WhatsApp Business setup and
+            can't be changed here. Contact Neeed to change them.
+          </span>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={busy}
+        onClick={() =>
+          start(async () => {
+            const r = await saveClinicAction(f);
+            setErrors(r.ok ? {} : r.errors);
+            if (r.ok) say("Clinic details saved.");
+          })
+        }
+      >
+        {busy ? (
+          "Saving…"
+        ) : (
+          <Morph active={saved} off="Save clinic details" on="Saved" />
+        )}
+      </button>
+      {toastEl}
+    </Section>
   );
 }

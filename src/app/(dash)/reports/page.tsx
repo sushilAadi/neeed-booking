@@ -33,6 +33,7 @@ const KIND: Record<string, [string, string]> = {
   staff_added: ["Staff", "badge-done"],
   staff_removed: ["Staff", "badge-cancel"],
   key_reissued: ["Staff", "badge-done"],
+  clinic_changed: ["Settings", "badge-done"],
 };
 
 /** One plain sentence per activity row. */
@@ -68,6 +69,8 @@ function describe(a: Activity, appts: Map<string, Appointment>): string {
       return `Added ${d.name ?? "a receptionist"}`;
     case "staff_removed":
       return `Removed ${d.name ?? "a receptionist"}`;
+    case "clinic_changed":
+      return "Changed the clinic name, doctor name or address";
     case "key_reissued":
       return `Made a new key for ${d.name ?? "someone"}`;
     default:

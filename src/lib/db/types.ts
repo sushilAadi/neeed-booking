@@ -136,7 +136,12 @@ export interface Store {
     patch: Partial<
       Pick<
         Doctor,
-        "registrationNumber" | "signaturePath" | "standardFee" | "address"
+        | "registrationNumber"
+        | "signaturePath"
+        | "standardFee"
+        | "address"
+        | "clinicName"
+        | "name"
       >
     > &
       HoursPatch,

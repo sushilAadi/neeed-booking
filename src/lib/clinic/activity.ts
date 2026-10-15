@@ -22,7 +22,8 @@ export type Action =
   | "rx_setup_changed"
   | "staff_added"
   | "staff_removed"
-  | "key_reissued";
+  | "key_reissued"
+  | "clinic_changed";
 
 export function record(
   store: Store,

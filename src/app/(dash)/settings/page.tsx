@@ -5,8 +5,15 @@ import { PageHead } from "@/components/page-head";
 import { requireStaff } from "@/lib/auth/guard";
 import { today } from "@/lib/bot/ctx";
 import { PERIODS, periodHours } from "@/lib/slots";
-import { addDays, atIst, fmtDate } from "@/lib/time";
-import { BlockTime, Fee, Hours, RxSetup, StaffList } from "./sections";
+import { addDays, atIst, fmtDate, fmtPhone } from "@/lib/time";
+import {
+  BlockTime,
+  ClinicDetails,
+  Fee,
+  Hours,
+  RxSetup,
+  StaffList,
+} from "./sections";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -45,6 +52,14 @@ export default async function Page() {
         title="Settings"
       />
       <Rise targets="children" className="grid gap-4">
+        {isDoctor && (
+          <ClinicDetails
+            clinicName={doctor.clinicName}
+            name={doctor.name}
+            address={doctor.address ?? ""}
+            phone={fmtPhone(doctor.personalPhone)}
+          />
+        )}
         <Hours
           initial={{
             morning: periodHours(doctor, "morning"),

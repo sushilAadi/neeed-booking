@@ -50,6 +50,8 @@ const DOCTOR_COLS: Record<string, string> = {
   hoursSet: "hours_set",
   standardFee: "standard_fee",
   address: "address",
+  clinicName: "clinic_name",
+  name: "name",
 };
 
 const toAppointment = (r: Row): Appointment => ({
