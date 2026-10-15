@@ -9,6 +9,9 @@ const ok = {
   city: "Tezpur",
   phone: "+91 98765-43210",
   email: "",
+  clinicAddress: "Ward 4, Main Road, Tezpur 784001",
+  doctorAddress: "",
+  regNumber: "",
   ip: "1.1.1.1",
 };
 const quiet = async () => {};
@@ -77,4 +80,23 @@ test("still saves when the alert throws", async () => {
   });
   expect(r).toEqual({ ok: true });
   expect(s.accessRequests).toHaveLength(1);
+});
+
+test("chamber address is required; doctor address and reg. no. are saved when given", async () => {
+  const s = createMemoryStore();
+  const bad = await requestAccess(s, { ...ok, clinicAddress: " " }, NOW, quiet);
+  expect(bad.ok).toBe(false);
+  if (!bad.ok) expect(bad.errors.clinicAddress).toBeTruthy();
+  const good = await requestAccess(
+    s,
+    { ...ok, doctorAddress: "12 Lake View, Tezpur", regNumber: "ASM-1234" },
+    NOW,
+    quiet,
+  );
+  expect(good.ok).toBe(true);
+  expect(s.accessRequests[0]).toMatchObject({
+    clinicAddress: "Ward 4, Main Road, Tezpur 784001",
+    doctorAddress: "12 Lake View, Tezpur",
+    regNumber: "ASM-1234",
+  });
 });

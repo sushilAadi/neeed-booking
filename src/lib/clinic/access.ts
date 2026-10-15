@@ -7,9 +7,19 @@ export type AccessInput = {
   city: string;
   phone: string;
   email: string;
+  clinicAddress: string;
+  doctorAddress: string;
+  regNumber: string;
   ip: string;
 };
-type Field = "doctorName" | "clinicName" | "city" | "phone" | "email" | "form";
+type Field =
+  | "doctorName"
+  | "clinicName"
+  | "city"
+  | "phone"
+  | "email"
+  | "clinicAddress"
+  | "form";
 export type AccessResult =
   | { ok: true }
   | { ok: false; errors: Partial<Record<Field, string>> };
@@ -29,11 +39,15 @@ export async function requestAccess(
   const city = input.city.trim().slice(0, 80);
   const email = input.email.trim().slice(0, 120);
   const phone = normalizePhone(input.phone);
+  const clinicAddress = input.clinicAddress.trim().slice(0, 200);
+  const doctorAddress = input.doctorAddress.trim().slice(0, 200);
+  const regNumber = input.regNumber.trim().slice(0, 60);
   const errors: Partial<Record<Field, string>> = {};
   if (!doctorName) errors.doctorName = "Type your name.";
   if (!clinicName) errors.clinicName = "Type your clinic's name.";
   if (!city) errors.city = "Type your city.";
   if (!phone) errors.phone = "Type a 10-digit Indian mobile number.";
+  if (!clinicAddress) errors.clinicAddress = "Type your chamber's address.";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     errors.email = "Check the email, or leave it empty.";
   if (Object.keys(errors).length) return { ok: false, errors };
@@ -52,12 +66,15 @@ export async function requestAccess(
       city,
       phone: phone as string,
       email: email || null,
+      clinicAddress,
+      doctorAddress: doctorAddress || null,
+      regNumber: regNumber || null,
       ip: input.ip,
     },
     now,
   );
   await alert(
-    `*New access request*\n${doctorName} · ${clinicName}, ${city}\n+${phone}${email ? `\n${email}` : ""}`,
+    `*New access request*\n${doctorName} · ${clinicName}, ${city}\n${clinicAddress}\n+${phone}${email ? `\n${email}` : ""}`,
   ).catch(() => {});
   return { ok: true };
 }

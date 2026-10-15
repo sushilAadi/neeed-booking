@@ -32,6 +32,24 @@ const FIELDS = [
     mode: "numeric",
   },
   {
+    name: "clinicAddress",
+    label: "Chamber address",
+    placeholder: "Ward 4, Main Road, Tezpur 784001",
+    auto: "street-address",
+  },
+  {
+    name: "doctorAddress",
+    label: "Your address (optional)",
+    placeholder: "Home address, if different",
+    auto: "off",
+  },
+  {
+    name: "regNumber",
+    label: "Medical registration no. (optional)",
+    placeholder: "ASM-12345",
+    auto: "off",
+  },
+  {
     name: "email",
     label: "Email (optional)",
     placeholder: "asha@raoclinic.in",
@@ -39,6 +57,8 @@ const FIELDS = [
     mode: "email",
   },
 ] as const;
+// Full-width fields; the rest pair up two per row.
+const WIDE = new Set(["doctorName", "phone", "clinicAddress", "doctorAddress"]);
 
 export function SignupForm() {
   const [state, action, pending] = useActionState<SignupState | null, FormData>(
@@ -70,11 +90,11 @@ export function SignupForm() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {FIELDS.map((f) => {
-          const err = errors[f.name];
+          const err = (errors as Record<string, string | undefined>)[f.name];
           return (
             <label
               key={f.name}
-              className={`grid gap-1.5 ${f.name === "doctorName" || f.name === "email" ? "sm:col-span-2" : ""}`}
+              className={`grid gap-1.5 ${WIDE.has(f.name) ? "sm:col-span-2" : ""}`}
             >
               <span className="text-sm font-semibold">{f.label}</span>
               <span className="relative block">
@@ -94,7 +114,13 @@ export function SignupForm() {
                   autoComplete={f.auto}
                   inputMode={"mode" in f ? f.mode : undefined}
                   maxLength={
-                    f.name === "phone" ? 10 : f.name === "email" ? 120 : 80
+                    f.name === "phone"
+                      ? 10
+                      : f.name.endsWith("Address")
+                        ? 200
+                        : f.name === "email"
+                          ? 120
+                          : 80
                   }
                   onInput={
                     f.name === "phone"

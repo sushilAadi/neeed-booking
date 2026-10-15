@@ -118,6 +118,10 @@ export type AccessRequest = {
   /** "91" + 10 digits */
   phone: string;
   email: string | null;
+  /** Chamber / clinic address. */
+  clinicAddress: string;
+  doctorAddress: string | null;
+  regNumber: string | null;
   ip: string;
 };
 export type Bucket = "signatures" | "prescriptions";

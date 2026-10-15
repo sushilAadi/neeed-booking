@@ -20,10 +20,16 @@ export async function requestAccessAction(
   const to = process.env.NEEED_ADMIN_PHONE?.replace(/\D/g, "");
   const get = (k: string) => String(form.get(k) ?? "");
   const values = Object.fromEntries(
-    ["doctorName", "clinicName", "city", "phone", "email"].map((k) => [
-      k,
-      get(k),
-    ]),
+    [
+      "doctorName",
+      "clinicName",
+      "city",
+      "phone",
+      "email",
+      "clinicAddress",
+      "doctorAddress",
+      "regNumber",
+    ].map((k) => [k, get(k)]),
   );
   const r = await requestAccess(
     store,
@@ -33,6 +39,9 @@ export async function requestAccessAction(
       city: get("city"),
       phone: get("phone"),
       email: get("email"),
+      clinicAddress: get("clinicAddress"),
+      doctorAddress: get("doctorAddress"),
+      regNumber: get("regNumber"),
       ip,
     },
     now,
