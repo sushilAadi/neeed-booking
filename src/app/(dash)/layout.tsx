@@ -10,31 +10,50 @@ export default async function DashLayout({
 }) {
   const { doctor, staff, store, now } = await requireStaff();
   const closed = await store.isClosed(doctor.id, today(now).date);
+  const who = staff.role === "doctor" ? doctor.name : staff.name;
+  const initials = who
+    .replace(/^Dr\.?\s*/i, "")
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <div className="min-h-dvh md:flex">
       <Nav />
       <div className="min-w-0 flex-1">
-        <header className="glass sticky top-0 z-20 border-b pt-[env(safe-area-inset-top)]">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
+        <header className="sticky top-0 z-20 pt-[env(safe-area-inset-top)] max-md:glass max-md:border-b">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-3 md:px-8 md:pt-6 md:pb-2">
             <div className="min-w-0">
-              <p className="display truncate text-[17px] font-bold">
+              <p className="display truncate text-[17px] font-bold md:text-[19px]">
                 {doctor.clinicName}
               </p>
-              <p className="truncate text-[13px] text-muted">
-                {fmtDay(now)} ·{" "}
-                {staff.role === "doctor" ? doctor.name : staff.name}
-              </p>
+              <p className="truncate text-[13px] text-muted">{fmtDay(now)}</p>
             </div>
-            <span
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] font-bold ${
-                closed ? "bg-danger-soft text-danger" : "bg-ok-soft text-ok"
-              }`}
-            >
-              {closed ? "Closed today" : "Open today"}
-            </span>
+            <div className="flex items-center gap-2 md:gap-3">
+              <span
+                className={`badge ${closed ? "badge-cancel" : "badge-money"} py-2`}
+              >
+                {closed ? "Closed today" : "Open today"}
+              </span>
+              <div className="hidden items-center gap-3 rounded-full border border-line bg-surface py-1.5 pr-4 pl-1.5 shadow-[var(--shadow)] sm:flex">
+                <span
+                  aria-hidden
+                  className="grid size-9 place-items-center rounded-full bg-wait-soft text-[13px] font-bold text-wait"
+                >
+                  {initials}
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-[14px] font-semibold">{who}</span>
+                  <span className="block text-[12px] text-muted">
+                    {staff.role === "doctor" ? "Doctor" : "Reception"}
+                  </span>
+                </span>
+              </div>
+            </div>
           </div>
         </header>
-        <main className="mx-auto max-w-3xl px-4 pt-5 pb-28 md:pb-10">
+        <main className="mx-auto max-w-[1440px] px-4 pt-4 pb-32 md:px-8 md:pb-8">
           {children}
         </main>
       </div>

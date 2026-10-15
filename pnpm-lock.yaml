@@ -17,6 +17,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.110.8
         version: 2.110.8
+      cube-motion:
+        specifier: 0.1.0
+        version: 0.1.0(react@19.2.4)
       lucide-react:
         specifier: ^1.26.0
         version: 1.26.0(react@19.2.4)
@@ -711,6 +714,23 @@ packages:
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  cube-motion@0.1.0:
+    resolution: {integrity: sha512-oaUvTgw6CHT2CGJcT+l5gPh4mqHagkaik40GkIQhDhECc3tRkit+RTLyI6P5zuLxz7NlQBwAfJltUHXUwxqqXg==}
+    peerDependencies:
+      react: '>=18 <20'
+      solid-js: '>=1.8 <2'
+      svelte: '>=4 <6'
+      vue: '>=3.4 <4'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   d3-array@3.2.4:
     resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
@@ -1710,6 +1730,10 @@ snapshots:
   cookie@1.1.1: {}
 
   csstype@3.2.3: {}
+
+  cube-motion@0.1.0(react@19.2.4):
+    optionalDependencies:
+      react: 19.2.4
 
   d3-array@3.2.4:
     dependencies:

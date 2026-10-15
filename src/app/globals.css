@@ -1,56 +1,77 @@
 @import "tailwindcss";
 
 /*
-  Neeed design system — "the clinic desk".
-  Cool linen base, one ward-teal accent, status colours only for status.
-  Every text/background pair below meets WCAG AA (4.5:1).
+  Neeed design system — airy gradient, white pillowy cards, near-black pills.
+  Colour carries status only: waiting orange, done blue, cancelled red, money green.
+  Every text/background pair meets WCAG AA (4.5:1).
 */
 :root {
-  --bg: #f3f5f2;
-  --wash: rgba(18, 104, 78, 0.07);
+  --bg: #f4f1ee;
+  --bg-grad:
+    radial-gradient(70% 60% at 0% 0%, #fde3cf 0%, transparent 60%),
+    radial-gradient(60% 70% at 100% 20%, #dde9fb 0%, transparent 65%),
+    radial-gradient(50% 50% at 60% 100%, #eef2fb 0%, transparent 70%), #f5f3f1;
   --surface: #ffffff;
-  --sunk: #eaeeea;
-  --ink: #0f1f1a;
-  --muted: #56655f;
-  --line: #d6ded9;
-  --accent: #12684e;
-  --accent-soft: #e2efe9;
+  --surface-2: rgba(255, 255, 255, 0.72);
+  --sunk: #f3f4f6;
+  --ink: #111318;
+  --muted: #5d6270;
+  --line: #e6e7eb;
+  --accent: #111318;
+  --accent-soft: #eceef2;
   --accent-ink: #ffffff;
-  --wait: #8a5a12;
-  --wait-soft: #fbf0dc;
-  --ok: #12684e;
-  --ok-soft: #e2efe9;
-  --danger: #a83a2b;
-  --danger-soft: #f8e4e0;
-  --glass: rgba(243, 245, 242, 0.72);
+  --wait: #b4510f;
+  --wait-soft: #fdeee2;
+  --wait-fill: #f08a3c;
+  --done: #1d5fc2;
+  --done-soft: #e5effd;
+  --done-fill: #3b82f6;
+  --ok: #18794e;
+  --ok-soft: #e3f4ea;
+  --danger: #c0262d;
+  --danger-soft: #fde8e8;
+  --chart-purple: #8b5cf6;
+  --chart-yellow: #f5b324;
+  --glass: rgba(255, 255, 255, 0.7);
   --shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(15, 31, 26, 0.04), 0
-    8px 24px -12px rgba(15, 31, 26, 0.12);
-  --shadow-press: 0 1px 2px rgba(15, 31, 26, 0.06) inset;
+    0 1px 2px rgba(17, 19, 24, 0.04), 0 12px 32px -16px rgba(17, 19, 24, 0.14);
+  --shadow-lift:
+    0 2px 4px rgba(17, 19, 24, 0.05), 0 20px 40px -18px rgba(17, 19, 24, 0.22);
+  --shadow-press: 0 1px 2px rgba(17, 19, 24, 0.08) inset;
+  --r-card: 28px;
+  --r-inner: 18px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1311;
-    --wash: rgba(92, 201, 163, 0.08);
-    --surface: #131d1a;
-    --sunk: #0f1815;
-    --ink: #e6efeb;
-    --muted: #9ab0a8;
-    --line: #26352f;
-    --accent: #5cc9a3;
-    --accent-soft: #163029;
-    --accent-ink: #06231a;
-    --wait: #f0b45a;
-    --wait-soft: #2e2311;
-    --ok: #5cc9a3;
-    --ok-soft: #163029;
-    --danger: #f08c7c;
-    --danger-soft: #34181a;
-    --glass: rgba(11, 19, 17, 0.7);
+  :root:not([data-theme="light"]) {
+    --bg: #0f1116;
+    --bg-grad:
+      radial-gradient(70% 60% at 0% 0%, #2a1d17 0%, transparent 60%),
+      radial-gradient(60% 70% at 100% 20%, #142036 0%, transparent 65%), #0f1116;
+    --surface: #181b22;
+    --surface-2: rgba(24, 27, 34, 0.75);
+    --sunk: #20242d;
+    --ink: #f1f2f5;
+    --muted: #a3a8b5;
+    --line: #2a2e38;
+    --accent: #f1f2f5;
+    --accent-soft: #262a33;
+    --accent-ink: #111318;
+    --wait: #f6a86b;
+    --wait-soft: #35231a;
+    --wait-fill: #f08a3c;
+    --done: #8ab8ff;
+    --done-soft: #182a45;
+    --done-fill: #4f8ff7;
+    --ok: #6fd7a0;
+    --ok-soft: #15301f;
+    --danger: #ff8d8f;
+    --danger-soft: #3a1a1c;
+    --glass: rgba(18, 20, 26, 0.72);
     --shadow:
-      0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px -12px
-      rgba(0, 0, 0, 0.6);
+      0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 36px -18px rgba(0, 0, 0, 0.7);
+    --shadow-lift:
+      0 2px 4px rgba(0, 0, 0, 0.35), 0 24px 44px -18px rgba(0, 0, 0, 0.8);
     --shadow-press: 0 1px 2px rgba(0, 0, 0, 0.4) inset;
     color-scheme: dark;
   }
@@ -58,7 +79,6 @@
 
 @theme inline {
   --font-sans: var(--font-body), system-ui, sans-serif;
-  /* Matangi for all text under 50px; Gurvaco only via .display-xl (50px and up). */
   --font-display: var(--font-body), system-ui, sans-serif;
   --font-hero: var(--font-heading), var(--font-body), system-ui, sans-serif;
   --color-bg: var(--bg);
@@ -72,6 +92,8 @@
   --color-accent-ink: var(--accent-ink);
   --color-wait: var(--wait);
   --color-wait-soft: var(--wait-soft);
+  --color-done: var(--done);
+  --color-done-soft: var(--done-soft);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-danger: var(--danger);
@@ -79,9 +101,7 @@
 }
 
 body {
-  background:
-    radial-gradient(120% 60% at 50% -10%, var(--wash), transparent 60%),
-    var(--bg);
+  background: var(--bg-grad);
   background-attachment: fixed;
   color: var(--ink);
   font-feature-settings: "tnum" 1;
@@ -89,17 +109,29 @@ body {
 }
 
 @layer components {
-  /* Surfaces */
   .card {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 20px;
+    border-radius: var(--r-card);
     box-shadow: var(--shadow);
+  }
+  .card-pad {
+    padding: 16px;
+  }
+  @media (min-width: 768px) {
+    .card-pad {
+      padding: 24px;
+    }
+  }
+  .inner {
+    border-radius: var(--r-inner);
+    border: 1px solid var(--line);
+    background: var(--surface);
   }
   .glass {
     background: var(--glass);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
-    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
     border-color: var(--line);
   }
   .display {
@@ -110,14 +142,23 @@ body {
     font-family: var(--font-hero);
   }
   .eyebrow {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--muted);
   }
+  .page-title {
+    font-size: 32px;
+    line-height: 1.1;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+  }
+  @media (min-width: 768px) {
+    .page-title {
+      font-size: 40px;
+    }
+  }
 
-  /* Controls — 44px minimum targets */
+  /* Controls — 44px minimum targets, pills everywhere */
   .btn {
     display: inline-flex;
     min-height: 48px;
@@ -125,27 +166,27 @@ body {
     justify-content: center;
     gap: 8px;
     white-space: nowrap;
-    border-radius: 14px;
-    padding: 0 20px;
-    font-weight: 700;
+    border-radius: 999px;
+    padding: 0 22px;
+    font-weight: 600;
     font-size: 15px;
     transition:
-      transform 150ms ease,
-      box-shadow 150ms ease,
+      scale 150ms ease,
+      translate 200ms ease,
+      box-shadow 200ms ease,
       background-color 150ms ease;
   }
   .btn:active {
-    transform: scale(0.98);
-    box-shadow: var(--shadow-press);
+    scale: 0.97;
   }
   .btn:disabled {
-    opacity: 0.55;
+    opacity: 0.5;
     pointer-events: none;
   }
   .btn-primary {
     background: var(--accent);
     color: var(--accent-ink);
-    box-shadow: 0 8px 20px -10px var(--accent);
+    box-shadow: 0 10px 22px -12px rgba(17, 19, 24, 0.55);
   }
   .btn-ghost {
     border: 1px solid var(--line);
@@ -153,25 +194,52 @@ body {
     color: var(--ink);
   }
   .btn-danger {
-    border: 1px solid var(--danger);
+    border: 1px solid transparent;
     background: var(--danger-soft);
     color: var(--danger);
   }
   .btn-sm {
     min-height: 44px;
-    padding: 0 14px;
+    padding: 0 16px;
     font-size: 14px;
-    border-radius: 12px;
+  }
+  .btn-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    transition:
+      scale 150ms ease,
+      background-color 150ms ease;
+  }
+  .btn-icon:active {
+    scale: 0.94;
+  }
+  .btn-icon[aria-current="page"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
   }
   .field {
     width: 100%;
     min-height: 48px;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid var(--line);
     background: var(--sunk);
-    padding: 0 14px;
+    padding: 0 16px;
     font-size: 16px; /* no iOS zoom */
     color: var(--ink);
+    transition:
+      border-color 150ms ease,
+      background-color 150ms ease;
+  }
+  .field:focus {
+    background: var(--surface);
   }
   .field::placeholder {
     color: var(--muted);
@@ -179,64 +247,107 @@ body {
   .field[aria-invalid="true"] {
     border-color: var(--danger);
   }
-  .chip {
+  .chip,
+  .pill {
     display: inline-flex;
     min-height: 44px;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    gap: 6px;
+    border-radius: 999px;
     border: 1px solid var(--line);
     background: var(--surface);
-    padding: 0 12px;
+    padding: 0 16px;
     font-weight: 600;
     font-size: 14px;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      scale 150ms ease;
+  }
+  .chip:active,
+  .pill:active {
+    scale: 0.97;
   }
   .chip[aria-pressed="true"],
   .chip[aria-checked="true"],
-  .chip:has(input:checked) {
+  .chip:has(input:checked),
+  .pill[aria-pressed="true"],
+  .pill[aria-current="page"] {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--accent-ink);
   }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .badge-wait {
+    background: var(--wait-soft);
+    color: var(--wait);
+  }
+  .badge-done {
+    background: var(--done-soft);
+    color: var(--done);
+  }
+  .badge-cancel {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .badge-money {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+  /* A list that scrolls inside its card instead of the page */
+  .scroll-area {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
   .chip:has(input:focus-visible),
   .btn:focus-visible,
+  .btn-icon:focus-visible,
   .chip:focus-visible,
+  .pill:focus-visible,
   .field:focus-visible,
   a:focus-visible,
   button:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
   }
+}
 
-  /* Signature: the OPD token slip — time stub, perforation, details */
-  .token {
-    display: grid;
-    grid-template-columns: 76px 1fr;
+@media (prefers-reduced-motion: no-preference) {
+  .lift {
+    transition:
+      translate 220ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 220ms ease;
   }
-  .token-stub {
-    display: grid;
-    place-content: center;
-    text-align: center;
-    padding: 14px 6px;
-    border-right: 2px dashed var(--line);
-    position: relative;
+  .lift:hover {
+    translate: 0 -2px;
+    box-shadow: var(--shadow-lift);
   }
-  .token-stub::before,
-  .token-stub::after {
-    content: "";
-    position: absolute;
-    right: -9px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--bg);
-    border: 1px solid var(--line);
+  .btn-primary:hover {
+    translate: 0 -1px;
   }
-  .token-stub::before {
-    top: -9px;
-  }
-  .token-stub::after {
-    bottom: -9px;
+  .nudge:hover svg {
+    translate: 0 -1px;
+    transition: translate 180ms ease;
   }
 }
 
@@ -428,7 +539,7 @@ body {
     max-width: 560px;
     border: 1px solid var(--line);
     border-bottom: 0;
-    border-radius: 24px 24px 0 0;
+    border-radius: 28px 28px 0 0;
     background: var(--surface);
     color: var(--ink);
     box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, 0.35);
@@ -437,7 +548,7 @@ body {
     animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .sheet::backdrop {
-    background: rgba(8, 16, 13, 0.45);
+    background: rgba(17, 19, 24, 0.35);
     -webkit-backdrop-filter: blur(2px);
     backdrop-filter: blur(2px);
   }
@@ -445,7 +556,7 @@ body {
     .sheet {
       margin: auto;
       border-bottom: 1px solid var(--line);
-      border-radius: 24px;
+      border-radius: 28px;
     }
   }
 }
