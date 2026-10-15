@@ -291,7 +291,7 @@ function PatientCard(p: { c: Card; onCancel: () => void; onFee: () => void }) {
     .filter(Boolean)
     .join(" · ");
   return (
-    <li className={`card token overflow-visible ${off ? "opacity-60" : ""}`}>
+    <li className="card token overflow-visible">
       <div className="token-stub">
         <p className="display text-[19px] leading-tight font-bold">
           {c.time.replace(/ (AM|PM)$/, "")}
@@ -304,7 +304,7 @@ function PatientCard(p: { c: Card; onCancel: () => void; onFee: () => void }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p
-              className={`truncate text-[17px] font-bold ${off ? "line-through" : ""}`}
+              className={`truncate text-[17px] font-bold ${off ? "text-muted line-through" : ""}`}
             >
               {c.name}
             </p>
