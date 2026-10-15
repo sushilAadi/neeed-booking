@@ -35,7 +35,7 @@ export function Nav(p: {
     <>
       <nav
         aria-label="Main"
-        className="sticky top-0 z-40 hidden h-dvh w-[88px] shrink-0 flex-col items-center gap-3 py-6 md:flex"
+        className="sticky top-0 z-40 hidden h-dvh w-[88px] shrink-0 flex-col items-center gap-3 pt-[calc(10px+env(safe-area-inset-top))] pb-6 md:flex"
       >
         <Link
           href="/today"
