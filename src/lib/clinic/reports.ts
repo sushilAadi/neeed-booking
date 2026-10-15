@@ -83,3 +83,38 @@ export function buildReports(appts: Appointment[], now: Date) {
 }
 
 export type Reports = ReturnType<typeof buildReports>;
+
+export type PeriodKey = "today" | "week" | "month";
+
+/** Totals for the Reports period pills; week = the last 7 IST days including today. */
+export function periodSummary(appts: Appointment[], now: Date, p: PeriodKey) {
+  const today = istDate(now);
+  const inP = (a: Appointment) => {
+    const d = istDate(a.startsAt);
+    if (p === "today") return d === today;
+    if (p === "week") return d >= addDays(today, -6) && d <= today;
+    return d.slice(0, 7) === today.slice(0, 7) && d <= today;
+  };
+  const first = new Map<string, number>();
+  for (const a of appts) {
+    const t = +a.startsAt;
+    if (!first.has(a.patientPhone) || t < (first.get(a.patientPhone) as number))
+      first.set(a.patientPhone, t);
+  }
+  const list = appts.filter(inP);
+  const done = list.filter((a) => a.status === "COMPLETED");
+  const kept = list.filter((a) => a.status !== "CANCELLED");
+  const fresh = kept.filter(
+    (a) => first.get(a.patientPhone) === +a.startsAt,
+  ).length;
+  return {
+    collection: done.reduce((n, a) => n + (a.fee ?? 0), 0),
+    done: done.length,
+    waiting: list.filter((a) => a.status === "CONFIRMED").length,
+    cancelled: list.length - kept.length,
+    whatsapp: list.filter((a) => a.source === "whatsapp").length,
+    reception: list.filter((a) => a.source === "reception").length,
+    fresh,
+    returning: kept.length - fresh,
+  };
+}

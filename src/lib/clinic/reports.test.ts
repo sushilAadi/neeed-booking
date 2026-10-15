@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import type { Appointment } from "../db/types";
 import { atIst } from "../time";
-import { buildReports } from "./reports";
+import { buildReports, periodSummary } from "./reports";
 
 const NOW = atIst("2026-10-15", "18:00");
 let n = 0;
@@ -104,4 +104,45 @@ test("bookings by source and cancellations by who cancelled", () => {
     patient: 1,
     doctor: 1,
   });
+});
+
+test("totals for today, this week and this month", () => {
+  const appts = [
+    visit("2026-10-15", { fee: 300, patientPhone: "919000000009" }),
+    visit("2026-10-15", { status: "CONFIRMED", fee: null }),
+    visit("2026-10-14", {
+      status: "CANCELLED",
+      fee: null,
+      source: "reception",
+    }),
+    visit("2026-10-09", { fee: 500, source: "reception" }),
+    visit("2026-10-08", { fee: 100 }),
+    visit("2026-09-30", { fee: 200 }),
+  ];
+  const t = periodSummary(appts, NOW, "today");
+  expect(t).toMatchObject({
+    collection: 300,
+    done: 1,
+    waiting: 1,
+    cancelled: 0,
+    whatsapp: 2,
+    reception: 0,
+  });
+  // week = the last 7 IST days including today (9–15 Oct)
+  expect(periodSummary(appts, NOW, "week")).toMatchObject({
+    collection: 800,
+    done: 2,
+    cancelled: 1,
+    reception: 2,
+  });
+  const m = periodSummary(appts, NOW, "month");
+  expect(m).toMatchObject({
+    collection: 900,
+    done: 3,
+    waiting: 1,
+    cancelled: 1,
+  });
+  // 919000000009 never booked before → new; the shared number booked in September → returning
+  expect(m.fresh).toBe(1);
+  expect(m.returning).toBe(3);
 });

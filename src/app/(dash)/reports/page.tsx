@@ -1,10 +1,18 @@
+import { Rise } from "cube-motion/react";
+import { Ban, CheckCircle2, Clock, IndianRupee } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageHead } from "@/components/page-head";
+import { Ring } from "@/components/ring";
 import { requireStaff } from "@/lib/auth/guard";
-import { buildReports } from "@/lib/clinic/reports";
+import {
+  buildReports,
+  type PeriodKey,
+  periodSummary,
+} from "@/lib/clinic/reports";
 import type { Activity, Appointment } from "@/lib/db/types";
 import { fmtDay, fmtTime } from "@/lib/time";
-import { Charts } from "./charts";
+import { CollectionLine } from "./charts";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -48,10 +56,19 @@ function describe(a: Activity, appts: Map<string, Appointment>): string {
   }
 }
 
+const PERIODS = [
+  ["today", "Today"],
+  ["week", "This week"],
+  ["month", "This month"],
+] as const;
+
 export default async function ReportsPage({
   searchParams,
 }: PageProps<"/reports">) {
-  const { who } = await searchParams;
+  const { who, p: rawP } = await searchParams;
+  const p: PeriodKey = PERIODS.some(([k]) => k === rawP)
+    ? (rawP as PeriodKey)
+    : "month";
   const { store, doctor, now } = await requireStaff();
   const staffId = typeof who === "string" ? who : undefined;
   const [appts, activity, staff] = await Promise.all([
@@ -60,34 +77,121 @@ export default async function ReportsPage({
     store.listStaff(doctor.id),
   ]);
   const r = buildReports(appts, now);
+  const s = periodSummary(appts, now, p);
   const byId = new Map(appts.map((a) => [a.id, a]));
+  const q = (o: Record<string, string>) =>
+    `/reports?${new URLSearchParams({ p, ...(staffId ? { who: staffId } : {}), ...o })}`;
+  const bars = [
+    ["WhatsApp bookings", s.whatsapp, "var(--done-fill)"],
+    ["Reception bookings", s.reception, "var(--chart-purple)"],
+    ["New patients", s.fresh, "var(--ok)"],
+    ["Returning patients", s.returning, "var(--chart-yellow)"],
+    ["Cancelled", s.cancelled, "var(--danger)"],
+  ] as const;
+  const max = Math.max(1, ...bars.map((b) => b[1]));
+
   return (
-    <div className="grid gap-5">
-      <h1 className="display text-[26px] font-bold">Reports</h1>
-      <section
-        aria-label="Collection and patients"
-        className="grid grid-cols-2 gap-3 md:grid-cols-4"
+    <div className="grid gap-5 lg:h-[calc(100dvh-148px)] lg:grid-rows-[auto_auto_minmax(0,1fr)]">
+      <PageHead eyebrow="How the clinic is doing" title="Reports">
+        <nav aria-label="Period" className="flex flex-wrap gap-2">
+          {PERIODS.map(([k, label]) => (
+            <Link
+              key={k}
+              href={q({ p: k })}
+              className="pill"
+              aria-current={p === k ? "page" : undefined}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+      </PageHead>
+
+      <Rise
+        as="section"
+        targets="children"
+        aria-label="Totals"
+        className="grid grid-cols-2 gap-4 lg:grid-cols-4"
       >
-        {[
-          ["Collected today", rupees(r.today.collection)],
-          ["This month", rupees(r.month.collection)],
-          ["Seen today", String(r.today.seen)],
-          ["Seen this month", String(r.month.seen)],
-        ].map(([label, value]) => (
-          <div key={label} className="card px-4 py-3">
-            <p className="eyebrow">{label}</p>
-            <p className="display mt-1 text-[26px] leading-none font-bold">
-              {value}
-            </p>
+        {(
+          [
+            [
+              "Collected",
+              rupees(s.collection),
+              IndianRupee,
+              "bg-ok-soft text-ok",
+            ],
+            [
+              "Patients seen",
+              String(s.done),
+              CheckCircle2,
+              "bg-done-soft text-done",
+            ],
+            ["Waiting", String(s.waiting), Clock, "bg-wait-soft text-wait"],
+            [
+              "Cancelled",
+              String(s.cancelled),
+              Ban,
+              "bg-danger-soft text-danger",
+            ],
+          ] as const
+        ).map(([label, value, Icon, tone]) => (
+          <div
+            key={label}
+            className="card lift flex items-center gap-4 p-4 md:p-5"
+          >
+            <span
+              className={`grid size-11 shrink-0 place-items-center rounded-full ${tone}`}
+            >
+              <Icon size={20} strokeWidth={1.75} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-muted">{label}</p>
+              <p className="display truncate text-[26px] leading-tight font-medium">
+                {value}
+              </p>
+            </div>
           </div>
         ))}
-      </section>
+      </Rise>
 
-      <Charts r={r} />
+      <Rise
+        targets="children"
+        delay={120}
+        className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(280px,0.9fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)]"
+      >
+        <section
+          aria-labelledby="status-h"
+          className="card card-pad grid content-start gap-3"
+        >
+          <h2 id="status-h" className="display text-[20px] font-medium">
+            Visits
+          </h2>
+          <Ring waiting={s.waiting} done={s.done} cancelled={s.cancelled} />
+        </section>
 
-      <section aria-labelledby="act-h" className="card grid gap-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="act-h" className="font-bold">
+        <section
+          aria-labelledby="money-h"
+          className="card card-pad flex min-h-0 flex-col gap-2"
+        >
+          <div>
+            <h2 id="money-h" className="display text-[20px] font-medium">
+              Collection
+            </h2>
+            <p className="text-[13px] text-muted">
+              This month {rupees(r.month.collection)} · last 12 months
+            </p>
+          </div>
+          <div className="min-h-44 flex-1">
+            <CollectionLine data={r.collectionByMonth} />
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="act-h"
+          className="card card-pad flex min-h-0 flex-col gap-3 lg:col-start-3 lg:row-span-2 lg:row-start-1"
+        >
+          <h2 id="act-h" className="display text-[20px] font-medium">
             Activity
           </h2>
           <nav
@@ -95,42 +199,68 @@ export default async function ReportsPage({
             className="flex flex-wrap gap-2"
           >
             <Link
-              href="/reports"
-              className="chip"
-              aria-current={!staffId ? "true" : undefined}
-              aria-pressed={!staffId}
+              href={`/reports?p=${p}`}
+              className="pill"
+              aria-current={!staffId ? "page" : undefined}
             >
               Everyone
             </Link>
-            {staff.map((s) => (
+            {staff.map((x) => (
               <Link
-                key={s.id}
-                href={`/reports?who=${s.id}`}
-                className="chip"
-                aria-pressed={staffId === s.id}
+                key={x.id}
+                href={q({ who: x.id })}
+                className="pill"
+                aria-current={staffId === x.id ? "page" : undefined}
               >
-                {s.role === "doctor" ? doctor.name : s.name}
+                {x.role === "doctor" ? doctor.name : x.name}
               </Link>
             ))}
           </nav>
-        </div>
-        {!activity.length ? (
-          <p className="text-[15px] text-muted">
-            Nothing yet. Bookings, visits and changes show up here.
-          </p>
-        ) : (
-          <ol className="grid divide-y divide-line">
-            {activity.map((a) => (
-              <li key={a.id} className="grid gap-0.5 py-2.5">
-                <p className="text-[15px]">{describe(a, byId)}</p>
-                <p className="text-[13px] text-muted">
-                  {a.actor} · {fmtDay(a.at)}, {fmtTime(a.at)}
-                </p>
+          {!activity.length ? (
+            <p className="text-[15px] text-muted">
+              Nothing yet. Bookings, visits and changes show up here.
+            </p>
+          ) : (
+            <ol className="scroll-area -mx-1 grid content-start gap-2 px-1 lg:flex-1">
+              {activity.map((a) => (
+                <li key={a.id} className="inner grid gap-0.5 p-3">
+                  <p className="text-[14px] font-semibold">
+                    {describe(a, byId)}
+                  </p>
+                  <p className="text-[12px] text-muted">
+                    {a.actor} · {fmtDay(a.at)}, {fmtTime(a.at)}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        <section
+          aria-labelledby="mix-h"
+          className="card card-pad grid content-start gap-3 lg:col-span-2"
+        >
+          <h2 id="mix-h" className="display text-[20px] font-medium">
+            Where patients come from
+          </h2>
+          <ul className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {bars.map(([label, n, color]) => (
+              <li key={label} className="grid gap-1.5">
+                <div className="flex justify-between text-sm">
+                  <span>{label}</span>
+                  <span className="font-semibold">{n}</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-sunk">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${(n / max) * 100}%`, background: color }}
+                  />
+                </div>
               </li>
             ))}
-          </ol>
-        )}
-      </section>
+          </ul>
+        </section>
+      </Rise>
     </div>
   );
 }
